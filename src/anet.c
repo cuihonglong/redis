@@ -235,6 +235,7 @@ int anetResolveIP(char *err, char *host, char *ipbuf, size_t ipbuf_len) {
     return anetGenericResolve(err,host,ipbuf,ipbuf_len,ANET_IP_ONLY);
 }
 
+//端口复用
 static int anetSetReuseAddr(char *err, int fd) {
     int yes = 1;
     /* Make sure connection-intensive things like the redis benchmark
@@ -245,7 +246,7 @@ static int anetSetReuseAddr(char *err, int fd) {
     }
     return ANET_OK;
 }
-
+//创建socket
 static int anetCreateSocket(char *err, int domain) {
     int s;
     if ((s = socket(domain, SOCK_STREAM, 0)) == -1) {
@@ -437,6 +438,7 @@ int anetWrite(int fd, char *buf, int count)
     return totlen;
 }
 
+//开始监听
 static int anetListen(char *err, int s, struct sockaddr *sa, socklen_t len, int backlog) {
     if (bind(s,sa,len) == -1) {
         anetSetError(err, "bind: %s", strerror(errno));
@@ -462,6 +464,7 @@ static int anetV6Only(char *err, int s) {
     return ANET_OK;
 }
 
+//创建socket并开始监听
 static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backlog)
 {
     int s = -1, rv;
@@ -474,19 +477,28 @@ static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backl
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;    /* No effect if bindaddr != NULL */
 
+    //主机名端口 转换成 addrinfo
     if ((rv = getaddrinfo(bindaddr,_port,&hints,&servinfo)) != 0) {
         anetSetError(err, "%s", gai_strerror(rv));
         return ANET_ERR;
     }
+
     for (p = servinfo; p != NULL; p = p->ai_next) {
+
+        //创建socket
         if ((s = socket(p->ai_family,p->ai_socktype,p->ai_protocol)) == -1)
             continue;
 
         if (af == AF_INET6 && anetV6Only(err,s) == ANET_ERR) goto error;
+
+        //端口复用
         if (anetSetReuseAddr(err,s) == ANET_ERR) goto error;
+       
+        //监听端口
         if (anetListen(err,s,p->ai_addr,p->ai_addrlen,backlog) == ANET_ERR) s = ANET_ERR;
         goto end;
     }
+
     if (p == NULL) {
         anetSetError(err, "unable to bind socket, errno: %d", errno);
         goto error;
@@ -500,11 +512,13 @@ end:
     return s;
 }
 
+//创建socket并开始监听 IPV4
 int anetTcpServer(char *err, int port, char *bindaddr, int backlog)
 {
     return _anetTcpServer(err, port, bindaddr, AF_INET, backlog);
 }
 
+//创建socket并开始监听 IPV6
 int anetTcp6Server(char *err, int port, char *bindaddr, int backlog)
 {
     return _anetTcpServer(err, port, bindaddr, AF_INET6, backlog);

@@ -57,7 +57,7 @@
 #include <sys/socket.h>
 
 /* Our shared "common" objects */
-
+//公共的常量数据
 struct sharedObjectsStruct shared;
 
 /* Global vars that are actually used as constants. The following double
@@ -787,16 +787,15 @@ int hasActiveChildProcess() {
 /* ======================= Cron: called every 100 ms ======================== */
 
 /* Add a sample to the operations per second array of samples. */
+//ops记录
 void trackInstantaneousMetric(int metric, long long current_reading) {
     long long t = mstime() - server.inst_metric[metric].last_sample_time;
-    long long ops = current_reading -
-                    server.inst_metric[metric].last_sample_count;
+    long long ops = current_reading - server.inst_metric[metric].last_sample_count;
     long long ops_sec;
 
     ops_sec = t > 0 ? (ops*1000/t) : 0;
 
-    server.inst_metric[metric].samples[server.inst_metric[metric].idx] =
-        ops_sec;
+    server.inst_metric[metric].samples[server.inst_metric[metric].idx] = ops_sec;
     server.inst_metric[metric].idx++;
     server.inst_metric[metric].idx %= STATS_METRIC_SAMPLES;
     server.inst_metric[metric].last_sample_time = mstime();
@@ -1066,6 +1065,7 @@ void databasesCron(void) {
  * info or not using the 'update_daylight_info' argument. Normally we update
  * such info only when calling this function from serverCron() but not when
  * calling it from call(). */
+//更新缓存时间
 void updateCachedTime(int update_daylight_info) {
     server.ustime = ustime();
     server.mstime = server.ustime / 1000;
@@ -1103,7 +1103,7 @@ void updateCachedTime(int update_daylight_info) {
  * so in order to throttle execution of things we want to do less frequently
  * a macro is used: run_with_period(milliseconds) { .... }
  */
-
+//服务器TICK
 int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     int j;
     UNUSED(eventLoop);
@@ -1112,14 +1112,22 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* Software watchdog: deliver the SIGALRM that will reach the signal
      * handler if we don't return here fast enough. */
-    if (server.watchdog_period) watchdogScheduleSignal(server.watchdog_period);
+    //看门狗事件
+    if (server.watchdog_period)
+        watchdogScheduleSignal(server.watchdog_period);
 
     /* Update the time cache. */
+    //更新缓存时间
     updateCachedTime(1);
 
+
     server.hz = server.config_hz;
+
+
     /* Adapt the server.hz value to the number of configured clients. If we have
      * many clients, we want to call serverCron() with an higher frequency. */
+
+    //根据当前连接数动态调整帧率
     if (server.dynamic_hz) {
         while (listLength(server.clients) / server.hz >
                MAX_CLIENTS_PER_CLOCK_TICK)
@@ -1132,12 +1140,11 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         }
     }
 
+    //100毫秒执行  记录 OPS  命令数 网络输入 网络输出
     run_with_period(100) {
         trackInstantaneousMetric(STATS_METRIC_COMMAND,server.stat_numcommands);
-        trackInstantaneousMetric(STATS_METRIC_NET_INPUT,
-                server.stat_net_input_bytes);
-        trackInstantaneousMetric(STATS_METRIC_NET_OUTPUT,
-                server.stat_net_output_bytes);
+        trackInstantaneousMetric(STATS_METRIC_NET_INPUT,server.stat_net_input_bytes);
+        trackInstantaneousMetric(STATS_METRIC_NET_OUTPUT,server.stat_net_output_bytes);
     }
 
     /* We have just LRU_BITS bits per object for LRU information.
@@ -1151,10 +1158,14 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
      *
      * Note that you can change the resolution altering the
      * LRU_CLOCK_RESOLUTION define. */
+
+    //lrulock
     unsigned long lruclock = getLRUClock();
     atomicSet(server.lruclock,lruclock);
 
     /* Record the max memory used since the server was started. */
+
+    //记录REDIS峰值内存
     if (zmalloc_used_memory() > server.stat_peak_memory)
         server.stat_peak_memory = zmalloc_used_memory();
 
@@ -1436,7 +1447,7 @@ void afterSleep(struct aeEventLoop *eventLoop) {
 }
 
 /* =========================== Server initialization ======================== */
-
+//公共常量数据
 void createSharedObjects(void) {
     int j;
 
@@ -2028,11 +2039,17 @@ void resetServerStats(void) {
     server.aof_delayed_fsync = 0;
 }
 
+//服务器初始化
 void initServer(void) {
     int j;
 
+    //忽略 SIGHUP  SIGPIPE 信号
+    //SIGUP 挂起信号，关闭终端会产生这个信号
+    //SIGPIPE 服务器往以及关闭了的sockfd中写两次时，会产生SIGPIPE信号，如果不处理，默认会挂掉服务器
     signal(SIGHUP, SIG_IGN);
     signal(SIGPIPE, SIG_IGN);
+
+    //信号事件
     setupSignalHandlers();
 
     if (server.syslog_enabled) {
@@ -2058,8 +2075,13 @@ void initServer(void) {
     server.clients_paused = 0;
     server.system_memory_size = zmalloc_get_memory_size();
 
+    //公共常量数据
     createSharedObjects();
+
+    //调整并发上限
     adjustOpenFilesLimit();
+
+    //创建事件队列
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -2067,8 +2089,11 @@ void initServer(void) {
             strerror(errno));
         exit(1);
     }
+
+    //初始化数据库
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
+    //监听端口
     /* Open the TCP listening socket for the user commands. */
     if (server.port != 0 &&
         listenToPort(server.port,server.ipfd,&server.ipfd_count) == C_ERR)
@@ -2104,11 +2129,18 @@ void initServer(void) {
         server.db[j].defrag_later = listCreate();
     }
     evictionPoolAlloc(); /* Initialize the LRU keys pool. */
+
+    //订阅相关
     server.pubsub_channels = dictCreate(&keylistDictType,NULL);
     server.pubsub_patterns = listCreate();
+
     listSetFreeMethod(server.pubsub_patterns,freePubsubPattern);
     listSetMatchMethod(server.pubsub_patterns,listMatchPubsubPattern);
+
+    //serverCron执行次数
     server.cronloops = 0;
+
+    //存库相关 RDB AOF相关
     server.rdb_child_pid = -1;
     server.aof_child_pid = -1;
     server.rdb_child_type = RDB_CHILD_TYPE_NONE;
@@ -2116,6 +2148,8 @@ void initServer(void) {
     server.child_info_pipe[0] = -1;
     server.child_info_pipe[1] = -1;
     server.child_info_data.magic = 0;
+
+    //aof buf初始化
     aofRewriteBufferReset();
     server.aof_buf = sdsempty();
     server.lastsave = time(NULL); /* At startup we consider the DB saved. */
@@ -2123,6 +2157,8 @@ void initServer(void) {
     server.rdb_save_time_last = -1;
     server.rdb_save_time_start = -1;
     server.dirty = 0;
+
+    //初始化服务器状态
     resetServerStats();
     /* A few stats we don't want to reset: server startup time, and peak mem. */
     server.stat_starttime = time(NULL);
@@ -2142,6 +2178,7 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
+    //创建时间事件
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
@@ -2149,6 +2186,8 @@ void initServer(void) {
 
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
+
+    //socket事件监听
     for (j = 0; j < server.ipfd_count; j++) {
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
             acceptTcpHandler,NULL) == AE_ERR)
@@ -2157,12 +2196,15 @@ void initServer(void) {
                     "Unrecoverable error creating server.ipfd file event.");
             }
     }
-    if (server.sofd > 0 && aeCreateFileEvent(server.el,server.sofd,AE_READABLE,
-        acceptUnixHandler,NULL) == AE_ERR) serverPanic("Unrecoverable error creating server.sofd file event.");
+
+    if (server.sofd > 0 && aeCreateFileEvent(server.el,server.sofd,AE_READABLE,acceptUnixHandler,NULL) == AE_ERR) 
+        serverPanic("Unrecoverable error creating server.sofd file event.");
 
 
     /* Register a readable event for the pipe used to awake the event loop
      * when a blocked client in a module needs attention. */
+
+    //子进程网络监听
     if (aeCreateFileEvent(server.el, server.module_blocked_pipe[0], AE_READABLE,
         moduleBlockedClientPipeReadable,NULL) == AE_ERR) {
             serverPanic(
@@ -2170,6 +2212,7 @@ void initServer(void) {
                 "blocked clients subsystem.");
     }
 
+    //打开aof文件
     /* Open the AOF file if needed. */
     if (server.aof_state == AOF_ON) {
         server.aof_fd = open(server.aof_filename,
@@ -2191,10 +2234,20 @@ void initServer(void) {
         server.maxmemory_policy = MAXMEMORY_NO_EVICTION;
     }
 
-    if (server.cluster_enabled) clusterInit();
+    //集群初始化
+    if (server.cluster_enabled)
+     clusterInit();
+
+    //主从初始化
     replicationScriptCacheInit();
+
+    //lua脚本初始化
     scriptingInit(1);
+   
+    //日志初始化
     slowlogInit();
+
+    //慢查询检测 初始化
     latencyMonitorInit();
 }
 
@@ -3856,7 +3909,9 @@ static void sigShutdownHandler(int sig) {
     serverLogFromHandler(LL_WARNING, msg);
     server.shutdown_asap = 1;
 }
-
+//处理关闭信号
+//SIGTERM  kill命令不加参数 ，默认会产生这个信号。
+//SIGINT  通过ctrl+c产生。
 void setupSignalHandlers(void) {
     struct sigaction act;
 
@@ -4204,7 +4259,9 @@ int main(int argc, char **argv) {
     int background = server.daemonize && !server.supervised;
     if (background) daemonize();
 
+    //服务器初始化
     initServer();
+
     if (background || server.pidfile) createPidFile();
     redisSetProcTitle(argv[0]);
     redisAsciiArt();

@@ -1395,6 +1395,7 @@ void watchdogSignalHandler(int sig, siginfo_t *info, void *secret) {
 /* Schedule a SIGALRM delivery after the specified period in milliseconds.
  * If a timer is already scheduled, this function will re-schedule it to the
  * specified time. If period is 0 the current timer is disabled. */
+//linux秒级定时器
 void watchdogScheduleSignal(int period) {
     struct itimerval it;
 
@@ -1408,6 +1409,7 @@ void watchdogScheduleSignal(int period) {
 }
 
 /* Enable the software watchdog with the specified period in milliseconds. */
+//监听 SIGALRM信号
 void enableWatchdog(int period) {
     int min_period;
 
@@ -1431,6 +1433,7 @@ void enableWatchdog(int period) {
 }
 
 /* Disable the software watchdog. */
+//忽略SIGALRM信号
 void disableWatchdog(void) {
     struct sigaction act;
     if (server.watchdog_period == 0) return; /* Already disabled. */
