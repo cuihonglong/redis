@@ -816,9 +816,12 @@ long long getInstantaneousMetric(int metric) {
  * The function gets the current time in milliseconds as argument since
  * it gets called multiple times in a loop, so calling gettimeofday() for
  * each iteration would be costly without any actual gain. */
+//连接超时处理
 int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
     time_t now = now_ms/1000;
 
+
+    //纯客户端连接 超时 移除
     if (server.maxidletime &&
         !(c->flags & CLIENT_SLAVE) &&    /* no timeout for slaves and monitors */
         !(c->flags & CLIENT_MASTER) &&   /* no timeout for masters */
@@ -829,16 +832,21 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
         serverLog(LL_VERBOSE,"Closing idle client");
         freeClient(c);
         return 1;
-    } else if (c->flags & CLIENT_BLOCKED) {
+    } 
+    else if (c->flags & CLIENT_BLOCKED) 
+    {
         /* Blocked OPS timeout is handled with milliseconds resolution.
          * However note that the actual resolution is limited by
          * server.hz. */
 
+        //客户端阻塞时 timeout超时移除
         if (c->bpop.timeout != 0 && c->bpop.timeout < now_ms) {
             /* Handle blocking operation specific timeout. */
             replyToBlockedClientTimedOut(c);
             unblockClient(c);
-        } else if (server.cluster_enabled) {
+        }
+        else if (server.cluster_enabled) //集群 解锁
+        {
             /* Cluster: handle unblock & redirect of clients blocked
              * into keys no longer served by this server. */
             if (clusterRedirectBlockedClientIfNeeded(c))
@@ -852,25 +860,33 @@ int clientsCronHandleTimeout(client *c, mstime_t now_ms) {
  * free space not used, this function reclaims space if needed.
  *
  * The function always returns 0 as it never terminates the client. */
+//客户端缓冲区调整
 int clientsCronResizeQueryBuffer(client *c) {
+
+    //缓冲区分配内存大小
     size_t querybuf_size = sdsAllocSize(c->querybuf);
     time_t idletime = server.unixtime - c->lastinteraction;
 
     /* There are two conditions to resize the query buffer:
      * 1) Query buffer is > BIG_ARG and too big for latest peak.
      * 2) Query buffer is > BIG_ARG and client is idle. */
+    //1）缓冲区 大于 32KB 
+    //2）比峰值大2倍 或者 空闲次数大于2
     if (querybuf_size > PROTO_MBULK_BIG_ARG &&
          ((querybuf_size/(c->querybuf_peak+1)) > 2 ||
           idletime > 2))
     {
         /* Only resize the query buffer if it is actually wasting
          * at least a few kbytes. */
+
+        //空闲4K 就收缩
         if (sdsavail(c->querybuf) > 1024*4) {
             c->querybuf = sdsRemoveFreeSpace(c->querybuf);
         }
     }
     /* Reset the peak again to capture the peak memory usage in the next
      * cycle. */
+    //峰值清零
     c->querybuf_peak = 0;
 
     /* Clients representing masters also use a "pending query buffer" that
@@ -878,10 +894,13 @@ int clientsCronResizeQueryBuffer(client *c) {
      * also needs resizing from time to time, otherwise after a very large
      * transfer (a huge value or a big MIGRATE operation) it will keep using
      * a lot of memory. */
+    //主服务器
     if (c->flags & CLIENT_MASTER) {
         /* There are two conditions to resize the pending query buffer:
          * 1) Pending Query buffer is > LIMIT_PENDING_QUERYBUF.
          * 2) Used length is smaller than pending_querybuf_size/2 */
+
+        //待处理缓冲区大于4M 并且使用长度 小于2M 就收缩
         size_t pending_querybuf_size = sdsAllocSize(c->pending_querybuf);
         if(pending_querybuf_size > LIMIT_PENDING_QUERYBUF &&
            sdslen(c->pending_querybuf) < (pending_querybuf_size/2))
@@ -907,10 +926,14 @@ int clientsCronResizeQueryBuffer(client *c) {
 #define CLIENTS_PEAK_MEM_USAGE_SLOTS 8
 size_t ClientsPeakMemInput[CLIENTS_PEAK_MEM_USAGE_SLOTS];
 size_t ClientsPeakMemOutput[CLIENTS_PEAK_MEM_USAGE_SLOTS];
-
+//计算 输入输出峰值
 int clientsCronTrackExpansiveClients(client *c) {
+    
+    //分配空间
     size_t in_usage = sdsAllocSize(c->querybuf);
+    //回复列表使用得内存
     size_t out_usage = getClientOutputBufferMemoryUsage(c);
+
     int i = server.unixtime % CLIENTS_PEAK_MEM_USAGE_SLOTS;
     int zeroidx = (i+1) % CLIENTS_PEAK_MEM_USAGE_SLOTS;
 
@@ -975,6 +998,8 @@ void clientsCron(void) {
     /* Process at least a few clients while we are at it, even if we need
      * to process less than CLIENTS_CRON_MIN_ITERATIONS to meet our contract
      * of processing each client once per second. */
+
+    //每次处理5个客户端
     if (iterations < CLIENTS_CRON_MIN_ITERATIONS)
         iterations = (numclients < CLIENTS_CRON_MIN_ITERATIONS) ?
                      numclients : CLIENTS_CRON_MIN_ITERATIONS;
@@ -986,14 +1011,19 @@ void clientsCron(void) {
         /* Rotate the list, take the current head, process.
          * This way if the client must be removed from the list it's the
          * first element and we don't incur into O(N) computation. */
+
+        //先处理头节点
         listRotateTailToHead(server.clients);
         head = listFirst(server.clients);
         c = listNodeValue(head);
         /* The following functions do different service checks on the client.
          * The protocol is that they return non-zero if the client was
          * terminated. */
+        //客户端超时处理
         if (clientsCronHandleTimeout(c,now)) continue;
+        //缓冲区收缩
         if (clientsCronResizeQueryBuffer(c)) continue;
+        //计算输入输出峰值
         if (clientsCronTrackExpansiveClients(c)) continue;
     }
 }
@@ -1001,13 +1031,20 @@ void clientsCron(void) {
 /* This function handles 'background' operations we are required to do
  * incrementally in Redis databases, such as active key expiring, resizing,
  * rehashing. */
+//数据库事件
 void databasesCron(void) {
     /* Expire keys by random sampling. Not required for slaves
      * as master will synthesize DELs for us. */
-    if (server.active_expire_enabled) {
-        if (server.masterhost == NULL) {
+    //激活过期选项
+    if (server.active_expire_enabled) 
+    {
+        //根据当前服务器 类型 执行过期内容
+        if (server.masterhost == NULL)
+        {
             activeExpireCycle(ACTIVE_EXPIRE_CYCLE_SLOW);
-        } else {
+        } 
+        else 
+        {
             expireSlaveKeys();
         }
     }
@@ -1228,6 +1265,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     }
 
     /* Show information about connected clients */
+    //哨兵模式
     if (!server.sentinel_mode) {
         run_with_period(5000) {
             serverLog(LL_VERBOSE,
@@ -1239,13 +1277,16 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     }
 
     /* We need to do a few operations on clients asynchronously. */
+    //执行客户端连接事件
     clientsCron();
 
     /* Handle background operations on Redis databases. */
+    //数据库事件
     databasesCron();
 
     /* Start a scheduled AOF rewrite if this was requested by the user while
      * a BGSAVE was in progress. */
+    //开始 写RDB 或者 AOF 脚本
     if (server.rdb_child_pid == -1 && server.aof_child_pid == -1 &&
         server.aof_rewrite_scheduled)
     {
