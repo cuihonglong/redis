@@ -93,7 +93,7 @@ int activeExpireCycleTryExpire(redisDb *db, dictEntry *de, long long now) {
  * If type is ACTIVE_EXPIRE_CYCLE_SLOW, that normal expire cycle is
  * executed, where the time limit is a percentage of the REDIS_HZ period
  * as specified by the ACTIVE_EXPIRE_CYCLE_SLOW_TIME_PERC define. */
-
+//过期键值删除
 void activeExpireCycle(int type) {
     /* This function has some global state in order to continue the work
      * incrementally across calls. */
@@ -108,8 +108,12 @@ void activeExpireCycle(int type) {
     /* When clients are paused the dataset should be static not just from the
      * POV of clients not being able to write, but also from the POV of
      * expires and evictions of keys not being performed. */
+
+    //判断服务器是不是处于阻塞状态 阻塞==暂停
     if (clientsArePaused()) return;
 
+
+    //快速模式 2000毫秒 执行一次
     if (type == ACTIVE_EXPIRE_CYCLE_FAST) {
         /* Don't start a fast cycle if the previous cycle did not exit
          * for time limit. Also don't repeat a fast cycle for the same period
