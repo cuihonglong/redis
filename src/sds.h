@@ -101,6 +101,7 @@ static inline size_t sdslen(const sds s) {
     return 0;
 }
 
+//计算空闲空间
 static inline size_t sdsavail(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
