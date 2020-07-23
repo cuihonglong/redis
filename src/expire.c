@@ -286,13 +286,17 @@ dict *slaveKeysWithExpire = NULL;
 
 /* Check the set of keys created by the master with an expire set in order to
  * check if they should be evicted. */
-void expireSlaveKeys(void) {
+//收缩从服务器过期数据
+void expireSlaveKeys(void)
+{
     if (slaveKeysWithExpire == NULL ||
-        dictSize(slaveKeysWithExpire) == 0) return;
+        dictSize(slaveKeysWithExpire) == 0)
+        return;
 
     int cycles = 0, noexpire = 0;
     mstime_t start = mstime();
-    while(1) {
+    while (1)
+    {
         dictEntry *de = dictGetRandomKey(slaveKeysWithExpire);
         sds keyname = dictGetKey(de);
         uint64_t dbids = dictGetUnsignedIntegerVal(de);
@@ -301,14 +305,16 @@ void expireSlaveKeys(void) {
         /* Check the key against every database corresponding to the
          * bits set in the value bitmap. */
         int dbid = 0;
-        while(dbids && dbid < server.dbnum) {
-            if ((dbids & 1) != 0) {
-                redisDb *db = server.db+dbid;
-                dictEntry *expire = dictFind(db->expires,keyname);
+        while (dbids && dbid < server.dbnum)
+        {
+            if ((dbids & 1) != 0)
+            {
+                redisDb *db = server.db + dbid;
+                dictEntry *expire = dictFind(db->expires, keyname);
                 int expired = 0;
 
                 if (expire &&
-                    activeExpireCycleTryExpire(server.db+dbid,expire,start))
+                    activeExpireCycleTryExpire(server.db + dbid, expire, start))
                 {
                     expired = 1;
                 }
@@ -317,7 +323,8 @@ void expireSlaveKeys(void) {
                  * corresponding bit in the new bitmap we set as value.
                  * At the end of the loop if the bitmap is zero, it means we
                  * no longer need to keep track of this key. */
-                if (expire && !expired) {
+                if (expire && !expired)
+                {
                     noexpire++;
                     new_dbids |= (uint64_t)1 << dbid;
                 }
@@ -330,16 +337,19 @@ void expireSlaveKeys(void) {
          * of keys with an expire set directly in the writable slave. Otherwise
          * if the bitmap is zero, we no longer need to keep track of it. */
         if (new_dbids)
-            dictSetUnsignedIntegerVal(de,new_dbids);
+            dictSetUnsignedIntegerVal(de, new_dbids);
         else
-            dictDelete(slaveKeysWithExpire,keyname);
+            dictDelete(slaveKeysWithExpire, keyname);
 
         /* Stop conditions: found 3 keys we cna't expire in a row or
          * time limit was reached. */
         cycles++;
-        if (noexpire > 3) break;
-        if ((cycles % 64) == 0 && mstime()-start > 1) break;
-        if (dictSize(slaveKeysWithExpire) == 0) break;
+        if (noexpire > 3)
+            break;
+        if ((cycles % 64) == 0 && mstime() - start > 1)
+            break;
+        if (dictSize(slaveKeysWithExpire) == 0)
+            break;
     }
 }
 

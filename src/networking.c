@@ -958,14 +958,17 @@ void freeClientAsync(client *c) {
     listAddNodeTail(server.clients_to_close,c);
 }
 
-void freeClientsInAsyncFreeQueue(void) {
-    while (listLength(server.clients_to_close)) {
+//释放连接
+void freeClientsInAsyncFreeQueue(void)
+{
+    while (listLength(server.clients_to_close))
+    {
         listNode *ln = listFirst(server.clients_to_close);
         client *c = listNodeValue(ln);
 
         c->flags &= ~CLIENT_CLOSE_ASAP;
         freeClient(c);
-        listDelNode(server.clients_to_close,ln);
+        listDelNode(server.clients_to_close, ln);
     }
 }
 
@@ -2200,8 +2203,8 @@ void pauseClients(mstime_t end) {
 
 /* Return non-zero if clients are currently paused. As a side effect the
  * function checks if the pause time was reached and clear it. */
-int clientsArePaused(void) {
-
+int clientsArePaused(void)
+{
     //阻塞超时 处理
     if (server.clients_paused &&
         server.clients_pause_end_time < server.mstime)
@@ -2214,13 +2217,15 @@ int clientsArePaused(void) {
 
         /* Put all the clients in the unblocked clients queue in order to
          * force the re-processing of the input buffer if any. */
-        listRewind(server.clients,&li);
-        while ((ln = listNext(&li)) != NULL) {
+        listRewind(server.clients, &li);
+        while ((ln = listNext(&li)) != NULL)
+        {
             c = listNodeValue(ln);
 
             /* Don't touch slaves and blocked clients.
              * The latter pending requests will be processed when unblocked. */
-            if (c->flags & (CLIENT_SLAVE|CLIENT_BLOCKED)) continue;
+            if (c->flags & (CLIENT_SLAVE | CLIENT_BLOCKED))
+                continue;
             queueClientForReprocessing(c);
         }
     }

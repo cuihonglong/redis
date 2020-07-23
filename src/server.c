@@ -727,18 +727,19 @@ dictType replScriptCacheDictType = {
     NULL                        /* val destructor */
 };
 
-int htNeedsResize(dict *dict) {
+//判断是不是 需要收缩 收缩条件： 占用小于10% 
+int htNeedsResize(dict *dict)
+{
     long long size, used;
-
     size = dictSlots(dict);
     used = dictSize(dict);
-    return (size > DICT_HT_INITIAL_SIZE &&
-            (used*100/size < HASHTABLE_MIN_FILL));
+    return (size > DICT_HT_INITIAL_SIZE && (used * 100 / size < HASHTABLE_MIN_FILL));
 }
 
 /* If the percentage of used slots in the HT reaches HASHTABLE_MIN_FILL
  * we resize the hash table to save memory */
-void tryResizeHashTables(int dbid) {
+void tryResizeHashTables(int dbid)
+{
     if (htNeedsResize(server.db[dbid].dict))
         dictResize(server.db[dbid].dict);
     if (htNeedsResize(server.db[dbid].expires))
@@ -1032,31 +1033,34 @@ void clientsCron(void) {
  * incrementally in Redis databases, such as active key expiring, resizing,
  * rehashing. */
 //数据库事件
-void databasesCron(void) {
+void databasesCron(void)
+{
     /* Expire keys by random sampling. Not required for slaves
      * as master will synthesize DELs for us. */
     //激活过期选项
-    if (server.active_expire_enabled) 
+    if (server.active_expire_enabled)
     {
         //根据当前服务器 类型 执行过期内容
         if (server.masterhost == NULL)
         {
             activeExpireCycle(ACTIVE_EXPIRE_CYCLE_SLOW);
-        } 
-        else 
+        }
+        else //收缩从服务器
         {
             expireSlaveKeys();
         }
     }
 
     /* Defrag keys gradually. */
+    //逐渐整理数据
     if (server.active_defrag_enabled)
         activeDefragCycle();
 
     /* Perform hash tables rehashing if needed, but only if there are no
      * other processes saving the DB on disk. Otherwise rehashing is bad
      * as will cause a lot of copy-on-write of memory pages. */
-    if (server.rdb_child_pid == -1 && server.aof_child_pid == -1) {
+    if (server.rdb_child_pid == -1 && server.aof_child_pid == -1)
+    {
         /* We use global counters so if we stop the computation at a given
          * DB we'll be able to start from the successive in the next
          * cron loop iteration. */
@@ -1066,23 +1070,30 @@ void databasesCron(void) {
         int j;
 
         /* Don't test more DBs than we have. */
-        if (dbs_per_call > server.dbnum) dbs_per_call = server.dbnum;
+        if (dbs_per_call > server.dbnum)
+            dbs_per_call = server.dbnum;
 
         /* Resize */
-        for (j = 0; j < dbs_per_call; j++) {
+        for (j = 0; j < dbs_per_call; j++)
+        {
             tryResizeHashTables(resize_db % server.dbnum);
             resize_db++;
         }
 
         /* Rehash */
-        if (server.activerehashing) {
-            for (j = 0; j < dbs_per_call; j++) {
+        if (server.activerehashing)
+        {
+            for (j = 0; j < dbs_per_call; j++)
+            {
                 int work_done = incrementallyRehash(rehash_db);
-                if (work_done) {
+                if (work_done)
+                {
                     /* If the function did some work, stop here, we'll do
                      * more at the next cron loop. */
                     break;
-                } else {
+                }
+                else
+                {
                     /* If this db didn't need rehash, we'll try the next one. */
                     rehash_db++;
                     rehash_db %= server.dbnum;
@@ -1141,7 +1152,8 @@ void updateCachedTime(int update_daylight_info) {
  * a macro is used: run_with_period(milliseconds) { .... }
  */
 //服务器TICK
-int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
+int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData)
+{
     int j;
     UNUSED(eventLoop);
     UNUSED(id);
@@ -1157,20 +1169,20 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     //更新缓存时间
     updateCachedTime(1);
 
-
     server.hz = server.config_hz;
-
 
     /* Adapt the server.hz value to the number of configured clients. If we have
      * many clients, we want to call serverCron() with an higher frequency. */
 
     //根据当前连接数动态调整帧率
-    if (server.dynamic_hz) {
+    if (server.dynamic_hz)
+    {
         while (listLength(server.clients) / server.hz >
                MAX_CLIENTS_PER_CLOCK_TICK)
         {
             server.hz *= 2;
-            if (server.hz > CONFIG_MAX_HZ) {
+            if (server.hz > CONFIG_MAX_HZ)
+            {
                 server.hz = CONFIG_MAX_HZ;
                 break;
             }
@@ -1178,10 +1190,11 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     }
 
     //100毫秒执行  记录 OPS  命令数 网络输入 网络输出
-    run_with_period(100) {
-        trackInstantaneousMetric(STATS_METRIC_COMMAND,server.stat_numcommands);
-        trackInstantaneousMetric(STATS_METRIC_NET_INPUT,server.stat_net_input_bytes);
-        trackInstantaneousMetric(STATS_METRIC_NET_OUTPUT,server.stat_net_output_bytes);
+    run_with_period(100)
+    {
+        trackInstantaneousMetric(STATS_METRIC_COMMAND, server.stat_numcommands);
+        trackInstantaneousMetric(STATS_METRIC_NET_INPUT, server.stat_net_input_bytes);
+        trackInstantaneousMetric(STATS_METRIC_NET_OUTPUT, server.stat_net_output_bytes);
     }
 
     /* We have just LRU_BITS bits per object for LRU information.
@@ -1198,7 +1211,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     //lrulock
     unsigned long lruclock = getLRUClock();
-    atomicSet(server.lruclock,lruclock);
+    atomicSet(server.lruclock, lruclock);
 
     /* Record the max memory used since the server was started. */
 
@@ -1207,7 +1220,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         server.stat_peak_memory = zmalloc_used_memory();
 
     //每100毫秒记录 内存分配状态
-    run_with_period(100) 
+    run_with_period(100)
     {
         /* Sample the RSS and other metrics here since this is a relatively slow call.
          * We must sample the zmalloc_used at the same time we take the rss, otherwise
@@ -1223,11 +1236,12 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
                                    &server.cron_malloc_stats.allocator_resident);
         /* in case the allocator isn't providing these stats, fake them so that
          * fragmention info still shows some (inaccurate metrics) */
-        if (!server.cron_malloc_stats.allocator_resident) {
+        if (!server.cron_malloc_stats.allocator_resident)
+        {
             /* LUA memory isn't part of zmalloc_used, but it is part of the process RSS,
              * so we must desuct it in order to be able to calculate correct
              * "allocator fragmentation" ratio */
-            size_t lua_memory = lua_gc(server.lua,LUA_GCCOUNT,0)*1024LL;
+            size_t lua_memory = lua_gc(server.lua, LUA_GCCOUNT, 0) * 1024LL;
             server.cron_malloc_stats.allocator_resident = server.cron_malloc_stats.process_rss - lua_memory;
         }
         if (!server.cron_malloc_stats.allocator_active)
@@ -1241,24 +1255,27 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     //redis关闭前 事件处理  重要
     if (server.shutdown_asap)
-     {
-        if (prepareForShutdown(SHUTDOWN_NOFLAGS) == C_OK) exit(0);
-        serverLog(LL_WARNING,"SIGTERM received but errors trying to shut down the server, check the logs for more information");
+    {
+        if (prepareForShutdown(SHUTDOWN_NOFLAGS) == C_OK)
+            exit(0);
+        serverLog(LL_WARNING, "SIGTERM received but errors trying to shut down the server, check the logs for more information");
         server.shutdown_asap = 0;
     }
 
     /* Show some info about non-empty databases */
     //每5秒记录DB 日志
-    run_with_period(5000) 
+    run_with_period(5000)
     {
-        for (j = 0; j < server.dbnum; j++) {
+        for (j = 0; j < server.dbnum; j++)
+        {
             long long size, used, vkeys;
 
             size = dictSlots(server.db[j].dict);
             used = dictSize(server.db[j].dict);
             vkeys = dictSize(server.db[j].expires);
-            if (used || vkeys) {
-                serverLog(LL_VERBOSE,"DB %d: %lld keys (%lld volatile) in %lld slots HT.",j,used,vkeys,size);
+            if (used || vkeys)
+            {
+                serverLog(LL_VERBOSE, "DB %d: %lld keys (%lld volatile) in %lld slots HT.", j, used, vkeys, size);
                 /* dictPrintStats(server.dict); */
             }
         }
@@ -1266,13 +1283,15 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* Show information about connected clients */
     //哨兵模式
-    if (!server.sentinel_mode) {
-        run_with_period(5000) {
+    if (!server.sentinel_mode)
+    {
+        run_with_period(5000)
+        {
             serverLog(LL_VERBOSE,
-                "%lu clients connected (%lu replicas), %zu bytes in use",
-                listLength(server.clients)-listLength(server.slaves),
-                listLength(server.slaves),
-                zmalloc_used_memory());
+                      "%lu clients connected (%lu replicas), %zu bytes in use",
+                      listLength(server.clients) - listLength(server.slaves),
+                      listLength(server.slaves),
+                      zmalloc_used_memory());
         }
     }
 
@@ -1300,55 +1319,70 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
         int statloc;
         pid_t pid;
 
-        if ((pid = wait3(&statloc,WNOHANG,NULL)) != 0) {
+        if ((pid = wait3(&statloc, WNOHANG, NULL)) != 0)
+        {
             int exitcode = WEXITSTATUS(statloc);
             int bysignal = 0;
 
-            if (WIFSIGNALED(statloc)) bysignal = WTERMSIG(statloc);
+            if (WIFSIGNALED(statloc))
+                bysignal = WTERMSIG(statloc);
 
-            if (pid == -1) {
-                serverLog(LL_WARNING,"wait3() returned an error: %s. "
-                    "rdb_child_pid = %d, aof_child_pid = %d",
-                    strerror(errno),
-                    (int) server.rdb_child_pid,
-                    (int) server.aof_child_pid);
-            } else if (pid == server.rdb_child_pid) {
-                backgroundSaveDoneHandler(exitcode,bysignal);
-                if (!bysignal && exitcode == 0) receiveChildInfo();
-            } else if (pid == server.aof_child_pid) {
-                backgroundRewriteDoneHandler(exitcode,bysignal);
-                if (!bysignal && exitcode == 0) receiveChildInfo();
-            } else {
-                if (!ldbRemoveChild(pid)) {
+            if (pid == -1)
+            {
+                serverLog(LL_WARNING, "wait3() returned an error: %s. "
+                                      "rdb_child_pid = %d, aof_child_pid = %d",
+                          strerror(errno),
+                          (int)server.rdb_child_pid,
+                          (int)server.aof_child_pid);
+            }
+            else if (pid == server.rdb_child_pid)
+            {
+                backgroundSaveDoneHandler(exitcode, bysignal);
+                if (!bysignal && exitcode == 0)
+                    receiveChildInfo();
+            }
+            else if (pid == server.aof_child_pid)
+            {
+                backgroundRewriteDoneHandler(exitcode, bysignal);
+                if (!bysignal && exitcode == 0)
+                    receiveChildInfo();
+            }
+            else
+            {
+                if (!ldbRemoveChild(pid))
+                {
                     serverLog(LL_WARNING,
-                        "Warning, detected child with unmatched pid: %ld",
-                        (long)pid);
+                              "Warning, detected child with unmatched pid: %ld",
+                              (long)pid);
                 }
             }
             updateDictResizePolicy();
             closeChildInfoPipe();
         }
-    } else {
+    }
+    else
+    {
         /* If there is not a background saving/rewrite in progress check if
          * we have to save/rewrite now. */
-        for (j = 0; j < server.saveparamslen; j++) {
-            struct saveparam *sp = server.saveparams+j;
+        for (j = 0; j < server.saveparamslen; j++)
+        {
+            struct saveparam *sp = server.saveparams + j;
 
             /* Save if we reached the given amount of changes,
              * the given amount of seconds, and if the latest bgsave was
              * successful or if, in case of an error, at least
              * CONFIG_BGSAVE_RETRY_DELAY seconds already elapsed. */
             if (server.dirty >= sp->changes &&
-                server.unixtime-server.lastsave > sp->seconds &&
-                (server.unixtime-server.lastbgsave_try >
-                 CONFIG_BGSAVE_RETRY_DELAY ||
+                server.unixtime - server.lastsave > sp->seconds &&
+                (server.unixtime - server.lastbgsave_try >
+                     CONFIG_BGSAVE_RETRY_DELAY ||
                  server.lastbgsave_status == C_OK))
             {
-                serverLog(LL_NOTICE,"%d changes in %d seconds. Saving...",
-                    sp->changes, (int)sp->seconds);
+                serverLog(LL_NOTICE, "%d changes in %d seconds. Saving...",
+                          sp->changes, (int)sp->seconds);
                 rdbSaveInfo rsi, *rsiptr;
                 rsiptr = rdbPopulateSaveInfo(&rsi);
-                rdbSaveBackground(server.rdb_filename,rsiptr);
+                rdbSaveBackground(server.rdb_filename, rsiptr);
                 break;
             }
         }
@@ -1360,50 +1394,63 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
             server.aof_rewrite_perc &&
             server.aof_current_size > server.aof_rewrite_min_size)
         {
-            long long base = server.aof_rewrite_base_size ?
-                server.aof_rewrite_base_size : 1;
-            long long growth = (server.aof_current_size*100/base) - 100;
-            if (growth >= server.aof_rewrite_perc) {
-                serverLog(LL_NOTICE,"Starting automatic rewriting of AOF on %lld%% growth",growth);
+            long long base = server.aof_rewrite_base_size ? server.aof_rewrite_base_size : 1;
+            long long growth = (server.aof_current_size * 100 / base) - 100;
+            if (growth >= server.aof_rewrite_perc)
+            {
+                serverLog(LL_NOTICE, "Starting automatic rewriting of AOF on %lld%% growth", growth);
                 rewriteAppendOnlyFileBackground();
             }
         }
     }
 
-
     /* AOF postponed flush: Try at every cron cycle if the slow fsync
      * completed. */
-    if (server.aof_flush_postponed_start) flushAppendOnlyFile(0);
+    if (server.aof_flush_postponed_start)
+        flushAppendOnlyFile(0);
 
     /* AOF write errors: in this case we have a buffer to flush as well and
      * clear the AOF error in case of success to make the DB writable again,
      * however to try every second is enough in case of 'hz' is set to
      * an higher frequency. */
-    run_with_period(1000) {
+    run_with_period(1000)
+    {
         if (server.aof_last_write_status == C_ERR)
             flushAppendOnlyFile(0);
     }
 
     /* Close clients that need to be closed asynchronous */
+    //释放连接
     freeClientsInAsyncFreeQueue();
 
     /* Clear the paused clients flag if needed. */
+    //处理服务器阻塞状态
     clientsArePaused(); /* Don't check return value, just use the side effect.*/
 
     /* Replication cron function -- used to reconnect to master,
      * detect transfer failures, start background RDB transfers and so forth. */
-    run_with_period(1000) replicationCron();
+    //主从复制 tick
+    run_with_period(1000)
+        replicationCron();
 
     /* Run the Redis Cluster cron. */
-    run_with_period(100) {
-        if (server.cluster_enabled) clusterCron();
+    //集群TICK
+    run_with_period(100)
+    {
+        if (server.cluster_enabled)
+            clusterCron();
     }
 
     /* Run the Sentinel timer if we are in sentinel mode. */
-    if (server.sentinel_mode) sentinelTimer();
+    //哨兵TICK
+    if (server.sentinel_mode)
+        sentinelTimer();
 
     /* Cleanup expired MIGRATE cached sockets. */
-    run_with_period(1000) {
+
+    //关闭超时socket
+    run_with_period(1000)
+    {
         migrateCloseTimedoutSockets();
     }
 
@@ -1416,17 +1463,17 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
      * because we want to give priority to RDB savings for replication. */
     if (server.rdb_child_pid == -1 && server.aof_child_pid == -1 &&
         server.rdb_bgsave_scheduled &&
-        (server.unixtime-server.lastbgsave_try > CONFIG_BGSAVE_RETRY_DELAY ||
+        (server.unixtime - server.lastbgsave_try > CONFIG_BGSAVE_RETRY_DELAY ||
          server.lastbgsave_status == C_OK))
     {
         rdbSaveInfo rsi, *rsiptr;
         rsiptr = rdbPopulateSaveInfo(&rsi);
-        if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK)
+        if (rdbSaveBackground(server.rdb_filename, rsiptr) == C_OK)
             server.rdb_bgsave_scheduled = 0;
     }
 
     server.cronloops++;
-    return 1000/server.hz;
+    return 1000 / server.hz;
 }
 
 /* This function gets called every time Redis is entering the
@@ -2088,7 +2135,8 @@ void resetServerStats(void) {
 }
 
 //服务器初始化
-void initServer(void) {
+void initServer(void)
+{
     int j;
 
     //忽略 SIGHUP  SIGPIPE 信号
@@ -2100,9 +2148,10 @@ void initServer(void) {
     //信号事件
     setupSignalHandlers();
 
-    if (server.syslog_enabled) {
+    if (server.syslog_enabled)
+    {
         openlog(server.syslog_ident, LOG_PID | LOG_NDELAY | LOG_NOWAIT,
-            server.syslog_facility);
+                server.syslog_facility);
     }
 
     server.hz = server.config_hz;
@@ -2130,48 +2179,53 @@ void initServer(void) {
     adjustOpenFilesLimit();
 
     //创建事件队列
-    server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
-    if (server.el == NULL) {
+    server.el = aeCreateEventLoop(server.maxclients + CONFIG_FDSET_INCR);
+    if (server.el == NULL)
+    {
         serverLog(LL_WARNING,
-            "Failed creating the event loop. Error message: '%s'",
-            strerror(errno));
+                  "Failed creating the event loop. Error message: '%s'",
+                  strerror(errno));
         exit(1);
     }
 
     //初始化数据库
-    server.db = zmalloc(sizeof(redisDb)*server.dbnum);
+    server.db = zmalloc(sizeof(redisDb) * server.dbnum);
 
     //监听端口
     /* Open the TCP listening socket for the user commands. */
     if (server.port != 0 &&
-        listenToPort(server.port,server.ipfd,&server.ipfd_count) == C_ERR)
+        listenToPort(server.port, server.ipfd, &server.ipfd_count) == C_ERR)
         exit(1);
 
     /* Open the listening Unix domain socket. */
-    if (server.unixsocket != NULL) {
+    if (server.unixsocket != NULL)
+    {
         unlink(server.unixsocket); /* don't care if this fails */
-        server.sofd = anetUnixServer(server.neterr,server.unixsocket,
-            server.unixsocketperm, server.tcp_backlog);
-        if (server.sofd == ANET_ERR) {
+        server.sofd = anetUnixServer(server.neterr, server.unixsocket,
+                                     server.unixsocketperm, server.tcp_backlog);
+        if (server.sofd == ANET_ERR)
+        {
             serverLog(LL_WARNING, "Opening Unix socket: %s", server.neterr);
             exit(1);
         }
-        anetNonBlock(NULL,server.sofd);
+        anetNonBlock(NULL, server.sofd);
     }
 
     /* Abort if there are no listening sockets at all. */
-    if (server.ipfd_count == 0 && server.sofd < 0) {
+    if (server.ipfd_count == 0 && server.sofd < 0)
+    {
         serverLog(LL_WARNING, "Configured to not listen anywhere, exiting.");
         exit(1);
     }
 
     /* Create the Redis databases, and initialize other internal state. */
-    for (j = 0; j < server.dbnum; j++) {
-        server.db[j].dict = dictCreate(&dbDictType,NULL);
-        server.db[j].expires = dictCreate(&keyptrDictType,NULL);
-        server.db[j].blocking_keys = dictCreate(&keylistDictType,NULL);
-        server.db[j].ready_keys = dictCreate(&objectKeyPointerValueDictType,NULL);
-        server.db[j].watched_keys = dictCreate(&keylistDictType,NULL);
+    for (j = 0; j < server.dbnum; j++)
+    {
+        server.db[j].dict = dictCreate(&dbDictType, NULL);
+        server.db[j].expires = dictCreate(&keyptrDictType, NULL);
+        server.db[j].blocking_keys = dictCreate(&keylistDictType, NULL);
+        server.db[j].ready_keys = dictCreate(&objectKeyPointerValueDictType, NULL);
+        server.db[j].watched_keys = dictCreate(&keylistDictType, NULL);
         server.db[j].id = j;
         server.db[j].avg_ttl = 0;
         server.db[j].defrag_later = listCreate();
@@ -2179,11 +2233,11 @@ void initServer(void) {
     evictionPoolAlloc(); /* Initialize the LRU keys pool. */
 
     //订阅相关
-    server.pubsub_channels = dictCreate(&keylistDictType,NULL);
+    server.pubsub_channels = dictCreate(&keylistDictType, NULL);
     server.pubsub_patterns = listCreate();
 
-    listSetFreeMethod(server.pubsub_patterns,freePubsubPattern);
-    listSetMatchMethod(server.pubsub_patterns,listMatchPubsubPattern);
+    listSetFreeMethod(server.pubsub_patterns, freePubsubPattern);
+    listSetMatchMethod(server.pubsub_patterns, listMatchPubsubPattern);
 
     //serverCron执行次数
     server.cronloops = 0;
@@ -2226,8 +2280,9 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
-    //创建时间事件
-    if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
+    //1毫秒1次服务器主TICK
+    if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR)
+    {
         serverPanic("Can't create event loop timers.");
         exit(1);
     }
@@ -2236,38 +2291,41 @@ void initServer(void) {
      * domain sockets. */
 
     //socket事件监听
-    for (j = 0; j < server.ipfd_count; j++) {
+    for (j = 0; j < server.ipfd_count; j++)
+    {
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
-            acceptTcpHandler,NULL) == AE_ERR)
-            {
-                serverPanic(
-                    "Unrecoverable error creating server.ipfd file event.");
-            }
+                              acceptTcpHandler, NULL) == AE_ERR)
+        {
+            serverPanic(
+                "Unrecoverable error creating server.ipfd file event.");
+        }
     }
 
-    if (server.sofd > 0 && aeCreateFileEvent(server.el,server.sofd,AE_READABLE,acceptUnixHandler,NULL) == AE_ERR) 
+    if (server.sofd > 0 && aeCreateFileEvent(server.el, server.sofd, AE_READABLE, acceptUnixHandler, NULL) == AE_ERR)
         serverPanic("Unrecoverable error creating server.sofd file event.");
-
 
     /* Register a readable event for the pipe used to awake the event loop
      * when a blocked client in a module needs attention. */
 
     //子进程网络监听
     if (aeCreateFileEvent(server.el, server.module_blocked_pipe[0], AE_READABLE,
-        moduleBlockedClientPipeReadable,NULL) == AE_ERR) {
-            serverPanic(
-                "Error registering the readable event for the module "
-                "blocked clients subsystem.");
+                          moduleBlockedClientPipeReadable, NULL) == AE_ERR)
+    {
+        serverPanic(
+            "Error registering the readable event for the module "
+            "blocked clients subsystem.");
     }
 
     //打开aof文件
     /* Open the AOF file if needed. */
-    if (server.aof_state == AOF_ON) {
+    if (server.aof_state == AOF_ON)
+    {
         server.aof_fd = open(server.aof_filename,
-                               O_WRONLY|O_APPEND|O_CREAT,0644);
-        if (server.aof_fd == -1) {
+                             O_WRONLY | O_APPEND | O_CREAT, 0644);
+        if (server.aof_fd == -1)
+        {
             serverLog(LL_WARNING, "Can't open the append-only file: %s",
-                strerror(errno));
+                      strerror(errno));
             exit(1);
         }
     }
@@ -2276,22 +2334,23 @@ void initServer(void) {
      * no explicit limit in the user provided configuration we set a limit
      * at 3 GB using maxmemory with 'noeviction' policy'. This avoids
      * useless crashes of the Redis instance for out of memory. */
-    if (server.arch_bits == 32 && server.maxmemory == 0) {
-        serverLog(LL_WARNING,"Warning: 32 bit instance detected but no memory limit set. Setting 3 GB maxmemory limit with 'noeviction' policy now.");
-        server.maxmemory = 3072LL*(1024*1024); /* 3 GB */
+    if (server.arch_bits == 32 && server.maxmemory == 0)
+    {
+        serverLog(LL_WARNING, "Warning: 32 bit instance detected but no memory limit set. Setting 3 GB maxmemory limit with 'noeviction' policy now.");
+        server.maxmemory = 3072LL * (1024 * 1024); /* 3 GB */
         server.maxmemory_policy = MAXMEMORY_NO_EVICTION;
     }
 
     //集群初始化
     if (server.cluster_enabled)
-     clusterInit();
+        clusterInit();
 
     //主从初始化
     replicationScriptCacheInit();
 
     //lua脚本初始化
     scriptingInit(1);
-   
+
     //日志初始化
     slowlogInit();
 
@@ -4151,30 +4210,48 @@ int redisIsSupervised(int mode) {
     return 0;
 }
 
-
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     struct timeval tv;
     int j;
 
 #ifdef REDIS_TEST
-    if (argc == 3 && !strcasecmp(argv[1], "test")) {
-        if (!strcasecmp(argv[2], "ziplist")) {
+    if (argc == 3 && !strcasecmp(argv[1], "test"))
+    {
+        if (!strcasecmp(argv[2], "ziplist"))
+        {
             return ziplistTest(argc, argv);
-        } else if (!strcasecmp(argv[2], "quicklist")) {
+        }
+        else if (!strcasecmp(argv[2], "quicklist"))
+        {
             quicklistTest(argc, argv);
-        } else if (!strcasecmp(argv[2], "intset")) {
+        }
+        else if (!strcasecmp(argv[2], "intset"))
+        {
             return intsetTest(argc, argv);
-        } else if (!strcasecmp(argv[2], "zipmap")) {
+        }
+        else if (!strcasecmp(argv[2], "zipmap"))
+        {
             return zipmapTest(argc, argv);
-        } else if (!strcasecmp(argv[2], "sha1test")) {
+        }
+        else if (!strcasecmp(argv[2], "sha1test"))
+        {
             return sha1Test(argc, argv);
-        } else if (!strcasecmp(argv[2], "util")) {
+        }
+        else if (!strcasecmp(argv[2], "util"))
+        {
             return utilTest(argc, argv);
-        } else if (!strcasecmp(argv[2], "endianconv")) {
+        }
+        else if (!strcasecmp(argv[2], "endianconv"))
+        {
             return endianconvTest(argc, argv);
-        } else if (!strcasecmp(argv[2], "crc64")) {
+        }
+        else if (!strcasecmp(argv[2], "crc64"))
+        {
             return crc64Test(argc, argv);
-        } else if (!strcasecmp(argv[2], "zmalloc")) {
+        }
+        else if (!strcasecmp(argv[2], "zmalloc"))
+        {
             return zmalloc_test(argc, argv);
         }
 
@@ -4186,30 +4263,32 @@ int main(int argc, char **argv) {
 #ifdef INIT_SETPROCTITLE_REPLACEMENT
     spt_init(argc, argv);
 #endif
-    setlocale(LC_COLLATE,"");
+    setlocale(LC_COLLATE, "");
     tzset(); /* Populates 'timezone' global. */
     zmalloc_set_oom_handler(redisOutOfMemoryHandler);
-    srand(time(NULL)^getpid());
-    gettimeofday(&tv,NULL);
+    srand(time(NULL) ^ getpid());
+    gettimeofday(&tv, NULL);
 
     char hashseed[16];
-    getRandomHexChars(hashseed,sizeof(hashseed));
-    dictSetHashFunctionSeed((uint8_t*)hashseed);
-    server.sentinel_mode = checkForSentinelMode(argc,argv);
+    getRandomHexChars(hashseed, sizeof(hashseed));
+    dictSetHashFunctionSeed((uint8_t *)hashseed);
+    server.sentinel_mode = checkForSentinelMode(argc, argv);
     initServerConfig();
     moduleInitModulesSystem();
 
     /* Store the executable path and arguments in a safe place in order
      * to be able to restart the server later. */
     server.executable = getAbsolutePath(argv[0]);
-    server.exec_argv = zmalloc(sizeof(char*)*(argc+1));
+    server.exec_argv = zmalloc(sizeof(char *) * (argc + 1));
     server.exec_argv[argc] = NULL;
-    for (j = 0; j < argc; j++) server.exec_argv[j] = zstrdup(argv[j]);
+    for (j = 0; j < argc; j++)
+        server.exec_argv[j] = zstrdup(argv[j]);
 
     /* We need to init sentinel right now as parsing the configuration file
      * in sentinel mode will have the effect of populating the sentinel
      * data structures with master nodes to monitor. */
-    if (server.sentinel_mode) {
+    if (server.sentinel_mode)
+    {
         initSentinelConfig();
         initSentinel();
     }
@@ -4217,34 +4296,42 @@ int main(int argc, char **argv) {
     /* Check if we need to start in redis-check-rdb/aof mode. We just execute
      * the program main. However the program is part of the Redis executable
      * so that we can easily execute an RDB check on loading errors. */
-    if (strstr(argv[0],"redis-check-rdb") != NULL)
-        redis_check_rdb_main(argc,argv,NULL);
-    else if (strstr(argv[0],"redis-check-aof") != NULL)
-        redis_check_aof_main(argc,argv);
+    if (strstr(argv[0], "redis-check-rdb") != NULL)
+        redis_check_rdb_main(argc, argv, NULL);
+    else if (strstr(argv[0], "redis-check-aof") != NULL)
+        redis_check_aof_main(argc, argv);
 
-    if (argc >= 2) {
+    if (argc >= 2)
+    {
         j = 1; /* First option to parse in argv[] */
         sds options = sdsempty();
         char *configfile = NULL;
 
         /* Handle special options --help and --version */
         if (strcmp(argv[1], "-v") == 0 ||
-            strcmp(argv[1], "--version") == 0) version();
+            strcmp(argv[1], "--version") == 0)
+            version();
         if (strcmp(argv[1], "--help") == 0 ||
-            strcmp(argv[1], "-h") == 0) usage();
-        if (strcmp(argv[1], "--test-memory") == 0) {
-            if (argc == 3) {
-                memtest(atoi(argv[2]),50);
+            strcmp(argv[1], "-h") == 0)
+            usage();
+        if (strcmp(argv[1], "--test-memory") == 0)
+        {
+            if (argc == 3)
+            {
+                memtest(atoi(argv[2]), 50);
                 exit(0);
-            } else {
-                fprintf(stderr,"Please specify the amount of memory to test in megabytes.\n");
-                fprintf(stderr,"Example: ./redis-server --test-memory 4096\n\n");
+            }
+            else
+            {
+                fprintf(stderr, "Please specify the amount of memory to test in megabytes.\n");
+                fprintf(stderr, "Example: ./redis-server --test-memory 4096\n\n");
                 exit(1);
             }
         }
 
         /* First argument is the config file name? */
-        if (argv[j][0] != '-' || argv[j][1] != '-') {
+        if (argv[j][0] != '-' || argv[j][1] != '-')
+        {
             configfile = argv[j];
             server.configfile = getAbsolutePath(configfile);
             /* Replace the config file in server.exec_argv with
@@ -4258,96 +4345,114 @@ int main(int argc, char **argv) {
          * configuration file. For instance --port 6380 will generate the
          * string "port 6380\n" to be parsed after the actual file name
          * is parsed, if any. */
-        while(j != argc) {
-            if (argv[j][0] == '-' && argv[j][1] == '-') {
+        while (j != argc)
+        {
+            if (argv[j][0] == '-' && argv[j][1] == '-')
+            {
                 /* Option name */
-                if (!strcmp(argv[j], "--check-rdb")) {
+                if (!strcmp(argv[j], "--check-rdb"))
+                {
                     /* Argument has no options, need to skip for parsing. */
                     j++;
                     continue;
                 }
-                if (sdslen(options)) options = sdscat(options,"\n");
-                options = sdscat(options,argv[j]+2);
-                options = sdscat(options," ");
-            } else {
+                if (sdslen(options))
+                    options = sdscat(options, "\n");
+                options = sdscat(options, argv[j] + 2);
+                options = sdscat(options, " ");
+            }
+            else
+            {
                 /* Option argument */
-                options = sdscatrepr(options,argv[j],strlen(argv[j]));
-                options = sdscat(options," ");
+                options = sdscatrepr(options, argv[j], strlen(argv[j]));
+                options = sdscat(options, " ");
             }
             j++;
         }
-        if (server.sentinel_mode && configfile && *configfile == '-') {
+        if (server.sentinel_mode && configfile && *configfile == '-')
+        {
             serverLog(LL_WARNING,
-                "Sentinel config from STDIN not allowed.");
+                      "Sentinel config from STDIN not allowed.");
             serverLog(LL_WARNING,
-                "Sentinel needs config file on disk to save state.  Exiting...");
+                      "Sentinel needs config file on disk to save state.  Exiting...");
             exit(1);
         }
         resetServerSaveParams();
-        loadServerConfig(configfile,options);
+        loadServerConfig(configfile, options);
         sdsfree(options);
     }
 
     serverLog(LL_WARNING, "oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo");
     serverLog(LL_WARNING,
-        "Redis version=%s, bits=%d, commit=%s, modified=%d, pid=%d, just started",
-            REDIS_VERSION,
-            (sizeof(long) == 8) ? 64 : 32,
-            redisGitSHA1(),
-            strtol(redisGitDirty(),NULL,10) > 0,
-            (int)getpid());
+              "Redis version=%s, bits=%d, commit=%s, modified=%d, pid=%d, just started",
+              REDIS_VERSION,
+              (sizeof(long) == 8) ? 64 : 32,
+              redisGitSHA1(),
+              strtol(redisGitDirty(), NULL, 10) > 0,
+              (int)getpid());
 
-    if (argc == 1) {
+    if (argc == 1)
+    {
         serverLog(LL_WARNING, "Warning: no config file specified, using the default config. In order to specify a config file use %s /path/to/%s.conf", argv[0], server.sentinel_mode ? "sentinel" : "redis");
-    } else {
+    }
+    else
+    {
         serverLog(LL_WARNING, "Configuration loaded");
     }
 
     server.supervised = redisIsSupervised(server.supervised_mode);
     int background = server.daemonize && !server.supervised;
-    if (background) daemonize();
+    if (background)
+        daemonize();
 
     //服务器初始化
     initServer();
 
-    if (background || server.pidfile) createPidFile();
+    if (background || server.pidfile)
+        createPidFile();
     redisSetProcTitle(argv[0]);
     redisAsciiArt();
     checkTcpBacklogSettings();
 
-    if (!server.sentinel_mode) {
+    if (!server.sentinel_mode)
+    {
         /* Things not needed when running in Sentinel mode. */
-        serverLog(LL_WARNING,"Server initialized");
-    #ifdef __linux__
+        serverLog(LL_WARNING, "Server initialized");
+#ifdef __linux__
         linuxMemoryWarnings();
-    #endif
+#endif
         moduleLoadFromQueue();
         InitServerLast();
         loadDataFromDisk();
-        if (server.cluster_enabled) {
-            if (verifyClusterConfigWithData() == C_ERR) {
+        if (server.cluster_enabled)
+        {
+            if (verifyClusterConfigWithData() == C_ERR)
+            {
                 serverLog(LL_WARNING,
-                    "You can't have keys in a DB different than DB 0 when in "
-                    "Cluster mode. Exiting.");
+                          "You can't have keys in a DB different than DB 0 when in "
+                          "Cluster mode. Exiting.");
                 exit(1);
             }
         }
         if (server.ipfd_count > 0)
-            serverLog(LL_NOTICE,"Ready to accept connections");
+            serverLog(LL_NOTICE, "Ready to accept connections");
         if (server.sofd > 0)
-            serverLog(LL_NOTICE,"The server is now ready to accept connections at %s", server.unixsocket);
-    } else {
+            serverLog(LL_NOTICE, "The server is now ready to accept connections at %s", server.unixsocket);
+    }
+    else
+    {
         InitServerLast();
         sentinelIsRunning();
     }
 
     /* Warning the user about suspicious maxmemory setting. */
-    if (server.maxmemory > 0 && server.maxmemory < 1024*1024) {
-        serverLog(LL_WARNING,"WARNING: You specified a maxmemory value that is less than 1MB (current value is %llu bytes). Are you sure this is what you really want?", server.maxmemory);
+    if (server.maxmemory > 0 && server.maxmemory < 1024 * 1024)
+    {
+        serverLog(LL_WARNING, "WARNING: You specified a maxmemory value that is less than 1MB (current value is %llu bytes). Are you sure this is what you really want?", server.maxmemory);
     }
 
-    aeSetBeforeSleepProc(server.el,beforeSleep);
-    aeSetAfterSleepProc(server.el,afterSleep);
+    aeSetBeforeSleepProc(server.el, beforeSleep);
+    aeSetAfterSleepProc(server.el, afterSleep);
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;

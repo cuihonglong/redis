@@ -2564,41 +2564,45 @@ long long replicationGetSlaveOffset(void) {
 /* --------------------------- REPLICATION CRON  ---------------------------- */
 
 /* Replication cron function, called 1 time per second. */
-void replicationCron(void) {
+//复制克隆事件 1秒
+void replicationCron(void)
+{
     static long long replication_cron_loops = 0;
 
     /* Non blocking connection timeout? */
     if (server.masterhost &&
         (server.repl_state == REPL_STATE_CONNECTING ||
          slaveIsInHandshakeState()) &&
-         (time(NULL)-server.repl_transfer_lastio) > server.repl_timeout)
+        (time(NULL) - server.repl_transfer_lastio) > server.repl_timeout)
     {
-        serverLog(LL_WARNING,"Timeout connecting to the MASTER...");
+        serverLog(LL_WARNING, "Timeout connecting to the MASTER...");
         cancelReplicationHandshake();
     }
 
     /* Bulk transfer I/O timeout? */
     if (server.masterhost && server.repl_state == REPL_STATE_TRANSFER &&
-        (time(NULL)-server.repl_transfer_lastio) > server.repl_timeout)
+        (time(NULL) - server.repl_transfer_lastio) > server.repl_timeout)
     {
-        serverLog(LL_WARNING,"Timeout receiving bulk data from MASTER... If the problem persists try to set the 'repl-timeout' parameter in redis.conf to a larger value.");
+        serverLog(LL_WARNING, "Timeout receiving bulk data from MASTER... If the problem persists try to set the 'repl-timeout' parameter in redis.conf to a larger value.");
         cancelReplicationHandshake();
     }
 
     /* Timed out master when we are an already connected slave? */
     if (server.masterhost && server.repl_state == REPL_STATE_CONNECTED &&
-        (time(NULL)-server.master->lastinteraction) > server.repl_timeout)
+        (time(NULL) - server.master->lastinteraction) > server.repl_timeout)
     {
-        serverLog(LL_WARNING,"MASTER timeout: no data nor PING received...");
+        serverLog(LL_WARNING, "MASTER timeout: no data nor PING received...");
         freeClient(server.master);
     }
 
     /* Check if we should connect to a MASTER */
-    if (server.repl_state == REPL_STATE_CONNECT) {
-        serverLog(LL_NOTICE,"Connecting to MASTER %s:%d",
-            server.masterhost, server.masterport);
-        if (connectWithMaster() == C_OK) {
-            serverLog(LL_NOTICE,"MASTER <-> REPLICA sync started");
+    if (server.repl_state == REPL_STATE_CONNECT)
+    {
+        serverLog(LL_NOTICE, "Connecting to MASTER %s:%d",
+                  server.masterhost, server.masterport);
+        if (connectWithMaster() == C_OK)
+        {
+            serverLog(LL_NOTICE, "MASTER <-> REPLICA sync started");
         }
     }
 
@@ -2630,10 +2634,11 @@ void replicationCron(void) {
             server.cluster->mf_end &&
             clientsArePaused();
 
-        if (!manual_failover_in_progress) {
-            ping_argv[0] = createStringObject("PING",4);
+        if (!manual_failover_in_progress)
+        {
+            ping_argv[0] = createStringObject("PING", 4);
             replicationFeedSlaves(server.slaves, server.slaveseldb,
-                ping_argv, 1);
+                                  ping_argv, 1);
             decrRefCount(ping_argv[0]);
         }
     }
@@ -2652,37 +2657,44 @@ void replicationCron(void) {
      * last interaction timer preventing a timeout. In this case we ignore the
      * ping period and refresh the connection once per second since certain
      * timeouts are set at a few seconds (example: PSYNC response). */
-    listRewind(server.slaves,&li);
-    while((ln = listNext(&li))) {
+    listRewind(server.slaves, &li);
+    while ((ln = listNext(&li)))
+    {
         client *slave = ln->value;
 
         int is_presync =
             (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START ||
-            (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_END &&
-             server.rdb_child_type != RDB_CHILD_TYPE_SOCKET));
+             (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_END &&
+              server.rdb_child_type != RDB_CHILD_TYPE_SOCKET));
 
-        if (is_presync) {
-            if (write(slave->fd, "\n", 1) == -1) {
+        if (is_presync)
+        {
+            if (write(slave->fd, "\n", 1) == -1)
+            {
                 /* Don't worry about socket errors, it's just a ping. */
             }
         }
     }
 
     /* Disconnect timedout slaves. */
-    if (listLength(server.slaves)) {
+    if (listLength(server.slaves))
+    {
         listIter li;
         listNode *ln;
 
-        listRewind(server.slaves,&li);
-        while((ln = listNext(&li))) {
+        listRewind(server.slaves, &li);
+        while ((ln = listNext(&li)))
+        {
             client *slave = ln->value;
 
-            if (slave->replstate != SLAVE_STATE_ONLINE) continue;
-            if (slave->flags & CLIENT_PRE_PSYNC) continue;
+            if (slave->replstate != SLAVE_STATE_ONLINE)
+                continue;
+            if (slave->flags & CLIENT_PRE_PSYNC)
+                continue;
             if ((server.unixtime - slave->repl_ack_time) > server.repl_timeout)
             {
                 serverLog(LL_WARNING, "Disconnecting timedout replica: %s",
-                    replicationGetSlaveName(slave));
+                          replicationGetSlaveName(slave));
                 freeClient(slave);
             }
         }
@@ -2699,7 +2711,8 @@ void replicationCron(void) {
     {
         time_t idle = server.unixtime - server.repl_no_slaves_since;
 
-        if (idle > server.repl_backlog_time_limit) {
+        if (idle > server.repl_backlog_time_limit)
+        {
             /* When we free the backlog, we always use a new
              * replication ID and clear the ID2. This is needed
              * because when there is no backlog, the master_repl_offset
@@ -2719,9 +2732,9 @@ void replicationCron(void) {
             clearReplicationId2();
             freeReplicationBacklog();
             serverLog(LL_NOTICE,
-                "Replication backlog freed after %d seconds "
-                "without connected replicas.",
-                (int) server.repl_backlog_time_limit);
+                      "Replication backlog freed after %d seconds "
+                      "without connected replicas.",
+                      (int)server.repl_backlog_time_limit);
         }
     }
 
@@ -2741,22 +2754,25 @@ void replicationCron(void) {
      * In case of diskless replication, we make sure to wait the specified
      * number of seconds (according to configuration) so that other slaves
      * have the time to arrive before we start streaming. */
-    if (server.rdb_child_pid == -1 && server.aof_child_pid == -1) {
+    if (server.rdb_child_pid == -1 && server.aof_child_pid == -1)
+    {
         time_t idle, max_idle = 0;
         int slaves_waiting = 0;
         int mincapa = -1;
         listNode *ln;
         listIter li;
 
-        listRewind(server.slaves,&li);
-        while((ln = listNext(&li))) {
+        listRewind(server.slaves, &li);
+        while ((ln = listNext(&li)))
+        {
             client *slave = ln->value;
-            if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START) {
+            if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START)
+            {
                 idle = server.unixtime - slave->lastinteraction;
-                if (idle > max_idle) max_idle = idle;
+                if (idle > max_idle)
+                    max_idle = idle;
                 slaves_waiting++;
-                mincapa = (mincapa == -1) ? slave->slave_capa :
-                                            (mincapa & slave->slave_capa);
+                mincapa = (mincapa == -1) ? slave->slave_capa : (mincapa & slave->slave_capa);
             }
         }
 

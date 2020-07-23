@@ -94,7 +94,8 @@ typedef struct aeFiredEvent {
 } aeFiredEvent;
 
 /* State of an event based program */
-typedef struct aeEventLoop {
+typedef struct aeEventLoop
+{
     int maxfd;   /* highest file descriptor currently registered */
     int setsize; /* max number of file descriptors tracked */
     long long timeEventNextId;

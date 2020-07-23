@@ -1027,7 +1027,9 @@ void computeDefragCycles() {
 /* Perform incremental defragmentation work from the serverCron.
  * This works in a similar way to activeExpireCycle, in the sense that
  * we do incremental work across calls. */
-void activeDefragCycle(void) {
+
+void activeDefragCycle(void)
+{
     static int current_db = -1;
     static unsigned long cursor = 0;
     static redisDb *db = NULL;
@@ -1039,12 +1041,13 @@ void activeDefragCycle(void) {
     mstime_t latency;
     int quit = 0;
 
-    if (server.aof_child_pid!=-1 || server.rdb_child_pid!=-1)
+    if (server.aof_child_pid != -1 || server.rdb_child_pid != -1)
         return; /* Defragging memory while there's a fork will just do damage. */
 
     /* Once a second, check if we the fragmentation justfies starting a scan
      * or making it more aggressive. */
-    run_with_period(1000) {
+    run_with_period(1000)
+    {
         computeDefragCycles();
     }
     if (!server.active_defrag_running)
@@ -1052,22 +1055,27 @@ void activeDefragCycle(void) {
 
     /* See activeExpireCycle for how timelimit is handled. */
     start = ustime();
-    timelimit = 1000000*server.active_defrag_running/server.hz/100;
-    if (timelimit <= 0) timelimit = 1;
+    timelimit = 1000000 * server.active_defrag_running / server.hz / 100;
+    if (timelimit <= 0)
+        timelimit = 1;
     endtime = start + timelimit;
     latencyStartMonitor(latency);
 
-    do {
+    do
+    {
         /* if we're not continuing a scan from the last call or loop, start a new one */
-        if (!cursor) {
+        if (!cursor)
+        {
             /* finish any leftovers from previous db before moving to the next one */
-            if (db && defragLaterStep(db, endtime)) {
+            if (db && defragLaterStep(db, endtime))
+            {
                 quit = 1; /* time is up, we didn't finish all the work */
-                break; /* this will exit the function and we'll continue on the next cycle */
+                break;    /* this will exit the function and we'll continue on the next cycle */
             }
 
             /* Move on to next database, and stop if we reached the last one. */
-            if (++current_db >= server.dbnum) {
+            if (++current_db >= server.dbnum)
+            {
                 /* defrag other items not part of the db / keys */
                 defragOtherGlobals();
 
@@ -1075,8 +1083,8 @@ void activeDefragCycle(void) {
                 size_t frag_bytes;
                 float frag_pct = getAllocatorFragmentation(&frag_bytes);
                 serverLog(LL_VERBOSE,
-                    "Active defrag done in %dms, reallocated=%d, frag=%.0f%%, frag_bytes=%zu",
-                    (int)((now - start_scan)/1000), (int)(server.stat_active_defrag_hits - start_stat), frag_pct, frag_bytes);
+                          "Active defrag done in %dms, reallocated=%d, frag=%.0f%%, frag_bytes=%zu",
+                          (int)((now - start_scan) / 1000), (int)(server.stat_active_defrag_hits - start_stat), frag_pct, frag_bytes);
 
                 start_scan = now;
                 current_db = -1;
@@ -1089,7 +1097,8 @@ void activeDefragCycle(void) {
                     continue;
                 break;
             }
-            else if (current_db==0) {
+            else if (current_db == 0)
+            {
                 /* Start a scan from the first database. */
                 start_scan = ustime();
                 start_stat = server.stat_active_defrag_hits;
@@ -1099,11 +1108,13 @@ void activeDefragCycle(void) {
             cursor = 0;
         }
 
-        do {
+        do
+        {
             /* before scanning the next bucket, see if we have big keys left from the previous bucket to scan */
-            if (defragLaterStep(db, endtime)) {
+            if (defragLaterStep(db, endtime))
+            {
                 quit = 1; /* time is up, we didn't finish all the work */
-                break; /* this will exit the function and we'll continue on the next cycle */
+                break;    /* this will exit the function and we'll continue on the next cycle */
             }
 
             cursor = dictScan(db->dict, cursor, defragScanCallback, defragDictBucketCallback, db);
@@ -1115,8 +1126,10 @@ void activeDefragCycle(void) {
              * the last db we call defragOtherGlobals, which must be done in once cycle */
             if (!cursor || (++iterations > 16 ||
                             server.stat_active_defrag_hits - prev_defragged > 512 ||
-                            server.stat_active_defrag_scanned - prev_scanned > 64)) {
-                if (!cursor || ustime() > endtime) {
+                            server.stat_active_defrag_scanned - prev_scanned > 64))
+            {
+                if (!cursor || ustime() > endtime)
+                {
                     quit = 1;
                     break;
                 }
@@ -1124,11 +1137,11 @@ void activeDefragCycle(void) {
                 prev_defragged = server.stat_active_defrag_hits;
                 prev_scanned = server.stat_active_defrag_scanned;
             }
-        } while(cursor && !quit);
-    } while(!quit);
+        } while (cursor && !quit);
+    } while (!quit);
 
     latencyEndMonitor(latency);
-    latencyAddSampleIfNeeded("active-defrag-cycle",latency);
+    latencyAddSampleIfNeeded("active-defrag-cycle", latency);
 }
 
 #else /* HAVE_DEFRAG */

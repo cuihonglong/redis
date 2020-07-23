@@ -60,14 +60,17 @@
     #endif
 #endif
 
-aeEventLoop *aeCreateEventLoop(int setsize) {
+aeEventLoop *aeCreateEventLoop(int setsize)
+{
     aeEventLoop *eventLoop;
     int i;
 
-    if ((eventLoop = zmalloc(sizeof(*eventLoop))) == NULL) goto err;
-    eventLoop->events = zmalloc(sizeof(aeFileEvent)*setsize);
-    eventLoop->fired = zmalloc(sizeof(aeFiredEvent)*setsize);
-    if (eventLoop->events == NULL || eventLoop->fired == NULL) goto err;
+    if ((eventLoop = zmalloc(sizeof(*eventLoop))) == NULL)
+        goto err;
+    eventLoop->events = zmalloc(sizeof(aeFileEvent) * setsize);
+    eventLoop->fired = zmalloc(sizeof(aeFiredEvent) * setsize);
+    if (eventLoop->events == NULL || eventLoop->fired == NULL)
+        goto err;
     eventLoop->setsize = setsize;
     eventLoop->lastTime = time(NULL);
     eventLoop->timeEventHead = NULL;
@@ -76,7 +79,8 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
     eventLoop->maxfd = -1;
     eventLoop->beforesleep = NULL;
     eventLoop->aftersleep = NULL;
-    if (aeApiCreate(eventLoop) == -1) goto err;
+    if (aeApiCreate(eventLoop) == -1)
+        goto err;
     /* Events with mask == AE_NONE are not set. So let's initialize the
      * vector with it. */
     for (i = 0; i < setsize; i++)
@@ -84,7 +88,8 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
     return eventLoop;
 
 err:
-    if (eventLoop) {
+    if (eventLoop)
+    {
         zfree(eventLoop->events);
         zfree(eventLoop->fired);
         zfree(eventLoop);
@@ -93,7 +98,9 @@ err:
 }
 
 /* Return the current set size. */
-int aeGetSetSize(aeEventLoop *eventLoop) {
+//获取ae大小
+int aeGetSetSize(aeEventLoop *eventLoop)
+{
     return eventLoop->setsize;
 }
 
@@ -122,21 +129,25 @@ int aeResizeSetSize(aeEventLoop *eventLoop, int setsize) {
     return AE_OK;
 }
 
+//ae销毁
 void aeDeleteEventLoop(aeEventLoop *eventLoop) {
     aeApiFree(eventLoop);
     zfree(eventLoop->events);
     zfree(eventLoop->fired);
     zfree(eventLoop);
 }
-
-void aeStop(aeEventLoop *eventLoop) {
+//ae暂停
+void aeStop(aeEventLoop *eventLoop)
+{
     eventLoop->stop = 1;
 }
 
+//创建文件监听事件
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
-        aeFileProc *proc, void *clientData)
+                      aeFileProc *proc, void *clientData)
 {
-    if (fd >= eventLoop->setsize) {
+    if (fd >= eventLoop->setsize)
+    {
         errno = ERANGE;
         return AE_ERR;
     }
@@ -145,8 +156,13 @@ int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
         return AE_ERR;
     fe->mask |= mask;
-    if (mask & AE_READABLE) fe->rfileProc = proc;
-    if (mask & AE_WRITABLE) fe->wfileProc = proc;
+
+    //根据 mask判断读写 类型
+    if (mask & AE_READABLE)
+        fe->rfileProc = proc;
+    if (mask & AE_WRITABLE)
+        fe->wfileProc = proc;
+
     fe->clientData = clientData;
     if (fd > eventLoop->maxfd)
         eventLoop->maxfd = fd;
@@ -494,13 +510,15 @@ int aeWait(int fd, int mask, long long milliseconds) {
         return retval;
     }
 }
-
-void aeMain(aeEventLoop *eventLoop) {
+//AE事件主函数
+void aeMain(aeEventLoop *eventLoop)
+{
     eventLoop->stop = 0;
-    while (!eventLoop->stop) {
+    while (!eventLoop->stop)
+    {
         if (eventLoop->beforesleep != NULL)
             eventLoop->beforesleep(eventLoop);
-        aeProcessEvents(eventLoop, AE_ALL_EVENTS|AE_CALL_AFTER_SLEEP);
+        aeProcessEvents(eventLoop, AE_ALL_EVENTS | AE_CALL_AFTER_SLEEP);
     }
 }
 
