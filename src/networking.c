@@ -82,21 +82,23 @@ void linkClient(client *c) {
     uint64_t id = htonu64(c->id);
     raxInsert(server.clients_index,(unsigned char*)&id,sizeof(id),c,NULL);
 }
-
-client *createClient(int fd) {
+//创建client链接
+client *createClient(int fd)
+{
     client *c = zmalloc(sizeof(client));
 
     /* passing -1 as fd it is possible to create a non connected client.
      * This is useful since all the commands needs to be executed
      * in the context of a client. When commands are executed in other
      * contexts (for instance a Lua script) we need a non connected client. */
-    if (fd != -1) {
-        anetNonBlock(NULL,fd);
-        anetEnableTcpNoDelay(NULL,fd);
+    if (fd != -1)
+    {
+        anetNonBlock(NULL, fd);
+        anetEnableTcpNoDelay(NULL, fd);
         if (server.tcpkeepalive)
-            anetKeepAlive(NULL,fd,server.tcpkeepalive);
-        if (aeCreateFileEvent(server.el,fd,AE_READABLE,
-            readQueryFromClient, c) == AE_ERR)
+            anetKeepAlive(NULL, fd, server.tcpkeepalive);
+        if (aeCreateFileEvent(server.el, fd, AE_READABLE,
+                              readQueryFromClient, c) == AE_ERR)
         {
             close(fd);
             zfree(c);
@@ -104,9 +106,9 @@ client *createClient(int fd) {
         }
     }
 
-    selectDb(c,0);
+    selectDb(c, 0);
     uint64_t client_id;
-    atomicGetIncr(server.next_client_id,client_id,1);
+    atomicGetIncr(server.next_client_id, client_id, 1);
     c->id = client_id;
     c->fd = fd;
     c->name = NULL;
@@ -137,11 +139,11 @@ client *createClient(int fd) {
     c->reply = listCreate();
     c->reply_bytes = 0;
     c->obuf_soft_limit_reached_time = 0;
-    listSetFreeMethod(c->reply,freeClientReplyValue);
-    listSetDupMethod(c->reply,dupClientReplyValue);
+    listSetFreeMethod(c->reply, freeClientReplyValue);
+    listSetDupMethod(c->reply, dupClientReplyValue);
     c->btype = BLOCKED_NONE;
     c->bpop.timeout = 0;
-    c->bpop.keys = dictCreate(&objectKeyHeapPointerValueDictType,NULL);
+    c->bpop.keys = dictCreate(&objectKeyHeapPointerValueDictType, NULL);
     c->bpop.target = NULL;
     c->bpop.xread_group = NULL;
     c->bpop.xread_consumer = NULL;
@@ -150,13 +152,14 @@ client *createClient(int fd) {
     c->bpop.reploffset = 0;
     c->woff = 0;
     c->watched_keys = listCreate();
-    c->pubsub_channels = dictCreate(&objectKeyPointerValueDictType,NULL);
+    c->pubsub_channels = dictCreate(&objectKeyPointerValueDictType, NULL);
     c->pubsub_patterns = listCreate();
     c->peerid = NULL;
     c->client_list_node = NULL;
-    listSetFreeMethod(c->pubsub_patterns,decrRefCountVoid);
-    listSetMatchMethod(c->pubsub_patterns,listMatchObjects);
-    if (fd != -1) linkClient(c);
+    listSetFreeMethod(c->pubsub_patterns, decrRefCountVoid);
+    listSetMatchMethod(c->pubsub_patterns, listMatchObjects);
+    if (fd != -1)
+        linkClient(c);
     initClientMultiState(c);
     return c;
 }
@@ -666,6 +669,7 @@ int clientHasPendingReplies(client *c) {
 
 #define MAX_ACCEPTS_PER_CALL 1000
 
+//接受连接处理
 static void acceptCommonHandler(int fd, int flags, char *ip)
 {
     client *c;
@@ -683,7 +687,7 @@ static void acceptCommonHandler(int fd, int flags, char *ip)
      * connection. Note that we create the client instead to check before
      * for this condition, since now the socket is already set in non-blocking
      * mode and we can send an error for free using the Kernel I/O */
-     //达到最大连接数
+    //达到最大连接数
     if (listLength(server.clients) > server.maxclients)
     {
         char *err = "-ERR max number of clients reached\r\n";
@@ -702,6 +706,7 @@ static void acceptCommonHandler(int fd, int flags, char *ip)
      * is no password set, nor a specific interface is bound, we don't accept
      * requests from non loopback interfaces. Instead we try to explain the
      * user what to do to fix it if needed. */
+    //许可模式
     if (server.protected_mode &&
         server.bindaddr_count == 0 &&
         server.requirepass == NULL &&
