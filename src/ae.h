@@ -49,9 +49,9 @@
 
 #define AE_FILE_EVENTS 1
 #define AE_TIME_EVENTS 2
-#define AE_ALL_EVENTS (AE_FILE_EVENTS|AE_TIME_EVENTS)
+#define AE_ALL_EVENTS (AE_FILE_EVENTS|AE_TIME_EVENTS) //check file event and time event
 #define AE_DONT_WAIT 4
-#define AE_CALL_AFTER_SLEEP 8
+#define AE_CALL_AFTER_SLEEP 8   //执行 aftersleep
 
 #define AE_NOMORE -1
 #define AE_DELETED_EVENT_ID -1

@@ -1479,14 +1479,17 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData)
 /* This function gets called every time Redis is entering the
  * main loop of the event driven library, that is, before to sleep
  * for ready file descriptors. */
-void beforeSleep(struct aeEventLoop *eventLoop) {
+//主循环 执行前函数
+void beforeSleep(struct aeEventLoop *eventLoop)
+{
     UNUSED(eventLoop);
 
     /* Call the Redis Cluster before sleep function. Note that this function
      * may change the state of Redis Cluster (from ok to fail or vice versa),
      * so it's a good idea to call it before serving the unblocked clients
      * later in this function. */
-    if (server.cluster_enabled) clusterBeforeSleep();
+    if (server.cluster_enabled)
+        clusterBeforeSleep();
 
     /* Run a fast expire cycle (the called function will return
      * ASAP if a fast cycle is not needed). */
@@ -1495,12 +1498,13 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
 
     /* Send all the slaves an ACK request if at least one client blocked
      * during the previous event loop iteration. */
-    if (server.get_ack_from_slaves) {
+    if (server.get_ack_from_slaves)
+    {
         robj *argv[3];
 
-        argv[0] = createStringObject("REPLCONF",8);
-        argv[1] = createStringObject("GETACK",6);
-        argv[2] = createStringObject("*",1); /* Not used argument. */
+        argv[0] = createStringObject("REPLCONF", 8);
+        argv[1] = createStringObject("GETACK", 6);
+        argv[2] = createStringObject("*", 1); /* Not used argument. */
         replicationFeedSlaves(server.slaves, server.slaveseldb, argv, 3);
         decrRefCount(argv[0]);
         decrRefCount(argv[1]);
@@ -1530,7 +1534,8 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
     /* Before we are going to sleep, let the threads access the dataset by
      * releasing the GIL. Redis main thread will not touch anything at this
      * time. */
-    if (moduleCount()) moduleReleaseGIL();
+    if (moduleCount())
+        moduleReleaseGIL();
 }
 
 /* This function is called immadiately after the event loop multiplexing
@@ -2219,6 +2224,7 @@ void initServer(void)
     }
 
     /* Create the Redis databases, and initialize other internal state. */
+    //初始化数据 dbnum = 16
     for (j = 0; j < server.dbnum; j++)
     {
         server.db[j].dict = dictCreate(&dbDictType, NULL);
@@ -2280,7 +2286,7 @@ void initServer(void)
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
-    //1毫秒1次服务器主TICK
+    //服务器主TICK 1毫秒
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR)
     {
         serverPanic("Can't create event loop timers.");
@@ -2296,8 +2302,7 @@ void initServer(void)
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
                               acceptTcpHandler, NULL) == AE_ERR)
         {
-            serverPanic(
-                "Unrecoverable error creating server.ipfd file event.");
+            serverPanic("Unrecoverable error creating server.ipfd file event.");
         }
     }
 
@@ -2308,8 +2313,7 @@ void initServer(void)
      * when a blocked client in a module needs attention. */
 
     //子进程网络监听
-    if (aeCreateFileEvent(server.el, server.module_blocked_pipe[0], AE_READABLE,
-                          moduleBlockedClientPipeReadable, NULL) == AE_ERR)
+    if (aeCreateFileEvent(server.el, server.module_blocked_pipe[0], AE_READABLE,moduleBlockedClientPipeReadable, NULL) == AE_ERR)
     {
         serverPanic(
             "Error registering the readable event for the module "
@@ -4273,7 +4277,9 @@ int main(int argc, char **argv)
     getRandomHexChars(hashseed, sizeof(hashseed));
     dictSetHashFunctionSeed((uint8_t *)hashseed);
     server.sentinel_mode = checkForSentinelMode(argc, argv);
+    //初始化server参数
     initServerConfig();
+    //模块初始化
     moduleInitModulesSystem();
 
     /* Store the executable path and arguments in a safe place in order

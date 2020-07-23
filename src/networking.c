@@ -665,12 +665,17 @@ int clientHasPendingReplies(client *c) {
 }
 
 #define MAX_ACCEPTS_PER_CALL 1000
-static void acceptCommonHandler(int fd, int flags, char *ip) {
+
+static void acceptCommonHandler(int fd, int flags, char *ip)
+{
     client *c;
-    if ((c = createClient(fd)) == NULL) {
+
+    //创建client
+    if ((c = createClient(fd)) == NULL)
+    {
         serverLog(LL_WARNING,
-            "Error registering fd event for the new client: %s (fd=%d)",
-            strerror(errno),fd);
+                  "Error registering fd event for the new client: %s (fd=%d)",
+                  strerror(errno), fd);
         close(fd); /* May be already closed, just ignore errors */
         return;
     }
@@ -678,11 +683,14 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
      * connection. Note that we create the client instead to check before
      * for this condition, since now the socket is already set in non-blocking
      * mode and we can send an error for free using the Kernel I/O */
-    if (listLength(server.clients) > server.maxclients) {
+     //达到最大连接数
+    if (listLength(server.clients) > server.maxclients)
+    {
         char *err = "-ERR max number of clients reached\r\n";
 
         /* That's a best effort error message, don't check write errors */
-        if (write(c->fd,err,strlen(err)) == -1) {
+        if (write(c->fd, err, strlen(err)) == -1)
+        {
             /* Nothing to do, Just to avoid the warning... */
         }
         server.stat_rejected_conn++;
@@ -700,7 +708,8 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
         !(flags & CLIENT_UNIX_SOCKET) &&
         ip != NULL)
     {
-        if (strcmp(ip,"127.0.0.1") && strcmp(ip,"::1")) {
+        if (strcmp(ip, "127.0.0.1") && strcmp(ip, "::1"))
+        {
             char *err =
                 "-DENIED Redis is running in protected mode because protected "
                 "mode is enabled, no bind address was specified, no "
@@ -722,7 +731,8 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
                 "4) Setup a bind address or an authentication password. "
                 "NOTE: You only need to do one of the above things in order for "
                 "the server to start accepting connections from the outside.\r\n";
-            if (write(c->fd,err,strlen(err)) == -1) {
+            if (write(c->fd, err, strlen(err)) == -1)
+            {
                 /* Nothing to do, Just to avoid the warning... */
             }
             server.stat_rejected_conn++;
@@ -735,23 +745,27 @@ static void acceptCommonHandler(int fd, int flags, char *ip) {
     c->flags |= flags;
 }
 
-void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
+//接受链接
+void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask)
+{
     int cport, cfd, max = MAX_ACCEPTS_PER_CALL;
     char cip[NET_IP_STR_LEN];
     UNUSED(el);
     UNUSED(mask);
     UNUSED(privdata);
 
-    while(max--) {
+    while (max--)
+    {
         cfd = anetTcpAccept(server.neterr, fd, cip, sizeof(cip), &cport);
-        if (cfd == ANET_ERR) {
+        if (cfd == ANET_ERR)
+        {
             if (errno != EWOULDBLOCK)
                 serverLog(LL_WARNING,
-                    "Accepting client connection: %s", server.neterr);
+                          "Accepting client connection: %s", server.neterr);
             return;
         }
-        serverLog(LL_VERBOSE,"Accepted %s:%d", cip, cport);
-        acceptCommonHandler(cfd,0,cip);
+        serverLog(LL_VERBOSE, "Accepted %s:%d", cip, cport);
+        acceptCommonHandler(cfd, 0, cip);
     }
 }
 
@@ -983,43 +997,53 @@ client *lookupClientByID(uint64_t id) {
 
 /* Write data in output buffers to client. Return C_OK if the client
  * is still valid after the call, C_ERR if it was freed. */
-int writeToClient(int fd, client *c, int handler_installed) {
+int writeToClient(int fd, client *c, int handler_installed)
+{
     ssize_t nwritten = 0, totwritten = 0;
     size_t objlen;
     clientReplyBlock *o;
 
-    while(clientHasPendingReplies(c)) {
-        if (c->bufpos > 0) {
-            nwritten = write(fd,c->buf+c->sentlen,c->bufpos-c->sentlen);
-            if (nwritten <= 0) break;
+    while (clientHasPendingReplies(c))
+    {
+        if (c->bufpos > 0)
+        {
+            nwritten = write(fd, c->buf + c->sentlen, c->bufpos - c->sentlen);
+            if (nwritten <= 0)
+                break;
             c->sentlen += nwritten;
             totwritten += nwritten;
 
             /* If the buffer was sent, set bufpos to zero to continue with
              * the remainder of the reply. */
-            if ((int)c->sentlen == c->bufpos) {
+            if ((int)c->sentlen == c->bufpos)
+            {
                 c->bufpos = 0;
                 c->sentlen = 0;
             }
-        } else {
+        }
+        else
+        {
             o = listNodeValue(listFirst(c->reply));
             objlen = o->used;
 
-            if (objlen == 0) {
+            if (objlen == 0)
+            {
                 c->reply_bytes -= o->size;
-                listDelNode(c->reply,listFirst(c->reply));
+                listDelNode(c->reply, listFirst(c->reply));
                 continue;
             }
 
             nwritten = write(fd, o->buf + c->sentlen, objlen - c->sentlen);
-            if (nwritten <= 0) break;
+            if (nwritten <= 0)
+                break;
             c->sentlen += nwritten;
             totwritten += nwritten;
 
             /* If we fully sent the object on head go to the next one */
-            if (c->sentlen == objlen) {
+            if (c->sentlen == objlen)
+            {
                 c->reply_bytes -= o->size;
-                listDelNode(c->reply,listFirst(c->reply));
+                listDelNode(c->reply, listFirst(c->reply));
                 c->sentlen = 0;
                 /* If there are no longer objects in the list, we expect
                  * the count of reply bytes to be exactly zero. */
@@ -1042,32 +1066,42 @@ int writeToClient(int fd, client *c, int handler_installed) {
         if (totwritten > NET_MAX_WRITES_PER_EVENT &&
             (server.maxmemory == 0 ||
              zmalloc_used_memory() < server.maxmemory) &&
-            !(c->flags & CLIENT_SLAVE)) break;
+            !(c->flags & CLIENT_SLAVE))
+            break;
     }
     server.stat_net_output_bytes += totwritten;
-    if (nwritten == -1) {
-        if (errno == EAGAIN) {
+    if (nwritten == -1)
+    {
+        if (errno == EAGAIN)
+        {
             nwritten = 0;
-        } else {
+        }
+        else
+        {
             serverLog(LL_VERBOSE,
-                "Error writing to client: %s", strerror(errno));
+                      "Error writing to client: %s", strerror(errno));
             freeClient(c);
             return C_ERR;
         }
     }
-    if (totwritten > 0) {
+    if (totwritten > 0)
+    {
         /* For clients representing masters we don't count sending data
          * as an interaction, since we always send REPLCONF ACK commands
          * that take some time to just fill the socket output buffer.
          * We just rely on data / pings received for timeout detection. */
-        if (!(c->flags & CLIENT_MASTER)) c->lastinteraction = server.unixtime;
+        if (!(c->flags & CLIENT_MASTER))
+            c->lastinteraction = server.unixtime;
     }
-    if (!clientHasPendingReplies(c)) {
+    if (!clientHasPendingReplies(c))
+    {
         c->sentlen = 0;
-        if (handler_installed) aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);
+        if (handler_installed)
+            aeDeleteFileEvent(server.el, c->fd, AE_WRITABLE);
 
         /* Close connection after entire reply has been sent. */
-        if (c->flags & CLIENT_CLOSE_AFTER_REPLY) {
+        if (c->flags & CLIENT_CLOSE_AFTER_REPLY)
+        {
             freeClient(c);
             return C_ERR;
         }
@@ -1076,10 +1110,11 @@ int writeToClient(int fd, client *c, int handler_installed) {
 }
 
 /* Write event handler. Just send data to the client. */
-void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
+void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask)
+{
     UNUSED(el);
     UNUSED(mask);
-    writeToClient(fd,privdata,1);
+    writeToClient(fd, privdata, 1);
 }
 
 /* This function is called just before entering the event loop, in the hope

@@ -5218,10 +5218,11 @@ int moduleRegisterApi(const char *funcname, void *funcptr) {
 /* Global initialization at Redis startup. */
 void moduleRegisterCoreAPI(void);
 
-void moduleInitModulesSystem(void) {
+void moduleInitModulesSystem(void)
+{
     moduleUnblockedClients = listCreate();
     server.loadmodule_queue = listCreate();
-    modules = dictCreate(&modulesDictType,NULL);
+    modules = dictCreate(&modulesDictType, NULL);
 
     /* Set up the keyspace notification susbscriber list and static client */
     moduleKeyspaceSubscribers = listCreate();
@@ -5231,17 +5232,22 @@ void moduleInitModulesSystem(void) {
     /* Set up filter list */
     moduleCommandFilters = listCreate();
 
+    //注册API
     moduleRegisterCoreAPI();
-    if (pipe(server.module_blocked_pipe) == -1) {
+
+    //创建管道
+    if (pipe(server.module_blocked_pipe) == -1)
+    {
         serverLog(LL_WARNING,
-            "Can't create the pipe for module blocking commands: %s",
-            strerror(errno));
+                  "Can't create the pipe for module blocking commands: %s",
+                  strerror(errno));
         exit(1);
     }
     /* Make the pipe non blocking. This is just a best effort aware mechanism
      * and we do not want to block not in the read nor in the write half. */
-    anetNonBlock(NULL,server.module_blocked_pipe[0]);
-    anetNonBlock(NULL,server.module_blocked_pipe[1]);
+    //管道读写设置非堵塞
+    anetNonBlock(NULL, server.module_blocked_pipe[0]);
+    anetNonBlock(NULL, server.module_blocked_pipe[1]);
 
     /* Create the timers radix tree. */
     Timers = raxNew();
