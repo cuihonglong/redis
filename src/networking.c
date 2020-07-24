@@ -39,49 +39,63 @@ static void setProtocolError(const char *errstr, client *c);
 /* Return the size consumed from the allocator, for the specified SDS string,
  * including internal fragmentation. This function is used in order to compute
  * the client output buffer size. */
-size_t sdsZmallocSize(sds s) {
+ 
+size_t sdsZmallocSize(sds s)
+{
     void *sh = sdsAllocPtr(s);
     return zmalloc_size(sh);
 }
 
 /* Return the amount of memory used by the sds string at object->ptr
  * for a string object. */
-size_t getStringObjectSdsUsedMemory(robj *o) {
-    serverAssertWithInfo(NULL,o,o->type == OBJ_STRING);
-    switch(o->encoding) {
-    case OBJ_ENCODING_RAW: return sdsZmallocSize(o->ptr);
-    case OBJ_ENCODING_EMBSTR: return zmalloc_size(o)-sizeof(robj);
-    default: return 0; /* Just integer encoding for now. */
+//根据encoding类型 判断 sds 大小
+size_t getStringObjectSdsUsedMemory(robj *o)
+{
+    serverAssertWithInfo(NULL, o, o->type == OBJ_STRING);
+    switch (o->encoding)
+    {
+    case OBJ_ENCODING_RAW:
+        return sdsZmallocSize(o->ptr);
+    case OBJ_ENCODING_EMBSTR:
+        return zmalloc_size(o) - sizeof(robj);
+    default:
+        return 0; /* Just integer encoding for now. */
     }
 }
 
 /* Client.reply list dup and free methods. */
-void *dupClientReplyValue(void *o) {
+void *dupClientReplyValue(void *o)
+{
     clientReplyBlock *old = o;
     clientReplyBlock *buf = zmalloc(sizeof(clientReplyBlock) + old->size);
     memcpy(buf, o, sizeof(clientReplyBlock) + old->size);
     return buf;
 }
 
-void freeClientReplyValue(void *o) {
+void freeClientReplyValue(void *o)
+{
     zfree(o);
 }
 
-int listMatchObjects(void *a, void *b) {
-    return equalStringObjects(a,b);
+int listMatchObjects(void *a, void *b)
+{
+    return equalStringObjects(a, b);
 }
 
 /* This function links the client to the global linked list of clients.
  * unlinkClient() does the opposite, among other things. */
-void linkClient(client *c) {
-    listAddNodeTail(server.clients,c);
+//client放到链表队尾  client list里 client_list_node 指针指向 client list 位置
+void linkClient(client *c)
+{
+    listAddNodeTail(server.clients, c);
     /* Note that we remember the linked list node where the client is stored,
      * this way removing the client in unlinkClient() will not require
      * a linear scan, but just a constant time operation. */
     c->client_list_node = listLast(server.clients);
     uint64_t id = htonu64(c->id);
-    raxInsert(server.clients_index,(unsigned char*)&id,sizeof(id),c,NULL);
+    raxInsert(server.clients_index, (unsigned char *)&id, sizeof(id), c, NULL);
 }
+
 //创建client链接
 client *createClient(int fd)
 {
@@ -212,25 +226,31 @@ void clientInstallWriteHandler(client *c) {
  * Typically gets called every time a reply is built, before adding more
  * data to the clients output buffers. If the function returns C_ERR no
  * data should be appended to the output buffers. */
-//读写状态判断
-int prepareClientToWrite(client *c) {
+//读写状态判断 判断客户端 现在可不可以写数据
+int prepareClientToWrite(client *c)
+{
     /* If it's the Lua client we always return ok without installing any
      * handler since there is no socket at all. */
-    if (c->flags & (CLIENT_LUA|CLIENT_MODULE)) return C_OK;
+    if (c->flags & (CLIENT_LUA | CLIENT_MODULE))
+        return C_OK;
 
     /* CLIENT REPLY OFF / SKIP handling: don't send replies. */
-    if (c->flags & (CLIENT_REPLY_OFF|CLIENT_REPLY_SKIP)) return C_ERR;
+    if (c->flags & (CLIENT_REPLY_OFF | CLIENT_REPLY_SKIP))
+        return C_ERR;
 
     /* Masters don't receive replies, unless CLIENT_MASTER_FORCE_REPLY flag
      * is set. */
     if ((c->flags & CLIENT_MASTER) &&
-        !(c->flags & CLIENT_MASTER_FORCE_REPLY)) return C_ERR;
+        !(c->flags & CLIENT_MASTER_FORCE_REPLY))
+        return C_ERR;
 
-    if (c->fd <= 0) return C_ERR; /* Fake client for AOF loading. */
+    if (c->fd <= 0)
+        return C_ERR; /* Fake client for AOF loading. */
 
     /* Schedule the client to write the output buffers to the socket, unless
      * it should already be setup to do so (it has already pending data). */
-    if (!clientHasPendingReplies(c)) clientInstallWriteHandler(c);
+    if (!clientHasPendingReplies(c))
+        clientInstallWriteHandler(c);
 
     /* Authorize the caller to queue in the output buffer of this client. */
     return C_OK;
@@ -239,7 +259,7 @@ int prepareClientToWrite(client *c) {
 /* -----------------------------------------------------------------------------
  * Low level functions to add more data to output buffers.
  * -------------------------------------------------------------------------- */
-
+//添加回复到 client发送队列
 int _addReplyToBuffer(client *c, const char *s, size_t len) {
     size_t available = sizeof(c->buf)-c->bufpos;
 
@@ -257,31 +277,35 @@ int _addReplyToBuffer(client *c, const char *s, size_t len) {
     return C_OK;
 }
 
-void _addReplyStringToList(client *c, const char *s, size_t len) {
-    if (c->flags & CLIENT_CLOSE_AFTER_REPLY) return;
+void _addReplyStringToList(client *c, const char *s, size_t len)
+{
+    if (c->flags & CLIENT_CLOSE_AFTER_REPLY)
+        return;
 
     listNode *ln = listLast(c->reply);
-    clientReplyBlock *tail = ln? listNodeValue(ln): NULL;
+    clientReplyBlock *tail = ln ? listNodeValue(ln) : NULL;
 
     /* Note that 'tail' may be NULL even if we have a tail node, becuase when
      * addDeferredMultiBulkLength() is used, it sets a dummy node to NULL just
      * fo fill it later, when the size of the bulk length is set. */
 
     /* Append to tail string when possible. */
-    if (tail) {
+    if (tail)
+    {
         /* Copy the part we can fit into the tail, and leave the rest for a
          * new node */
         size_t avail = tail->size - tail->used;
-        size_t copy = avail >= len? len: avail;
+        size_t copy = avail >= len ? len : avail;
         memcpy(tail->buf + tail->used, s, copy);
         tail->used += copy;
         s += copy;
         len -= copy;
     }
-    if (len) {
+    if (len)
+    {
         /* Create a new node, make sure it is allocated to at
          * least PROTO_REPLY_CHUNK_BYTES */
-        size_t size = len < PROTO_REPLY_CHUNK_BYTES? PROTO_REPLY_CHUNK_BYTES: len;
+        size_t size = len < PROTO_REPLY_CHUNK_BYTES ? PROTO_REPLY_CHUNK_BYTES : len;
         tail = zmalloc(size + sizeof(clientReplyBlock));
         /* take over the allocation's internal fragmentation */
         tail->size = zmalloc_usable(tail) - sizeof(clientReplyBlock);
@@ -299,21 +323,30 @@ void _addReplyStringToList(client *c, const char *s, size_t len) {
  * -------------------------------------------------------------------------- */
 
 /* Add the object 'obj' string representation to the client output buffer. */
-void addReply(client *c, robj *obj) {
-    if (prepareClientToWrite(c) != C_OK) return;
+//添加回复数据
+void addReply(client *c, robj *obj)
+{
+    if (prepareClientToWrite(c) != C_OK)
+        return;
 
-    if (sdsEncodedObject(obj)) {
-        if (_addReplyToBuffer(c,obj->ptr,sdslen(obj->ptr)) != C_OK)
-            _addReplyStringToList(c,obj->ptr,sdslen(obj->ptr));
-    } else if (obj->encoding == OBJ_ENCODING_INT) {
+    //str格式直接添加到发送缓冲区
+    if (sdsEncodedObject(obj))
+    {
+        if (_addReplyToBuffer(c, obj->ptr, sdslen(obj->ptr)) != C_OK)
+            _addReplyStringToList(c, obj->ptr, sdslen(obj->ptr));
+    }
+    else if (obj->encoding == OBJ_ENCODING_INT)
+    {
         /* For integer encoded strings we just convert it into a string
          * using our optimized function, and attach the resulting string
          * to the output buffer. */
         char buf[32];
-        size_t len = ll2string(buf,sizeof(buf),(long)obj->ptr);
-        if (_addReplyToBuffer(c,buf,len) != C_OK)
-            _addReplyStringToList(c,buf,len);
-    } else {
+        size_t len = ll2string(buf, sizeof(buf), (long)obj->ptr);
+        if (_addReplyToBuffer(c, buf, len) != C_OK)
+            _addReplyStringToList(c, buf, len);
+    }
+    else
+    {
         serverPanic("Wrong obj->encoding in addReply()");
     }
 }
