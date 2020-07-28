@@ -5499,6 +5499,7 @@ void readwriteCommand(client *c) {
  *
  * CLUSTER_REDIR_DOWN_STATE if the cluster is down but the user attempts to
  * execute a command that addresses one or more keys. */
+//集群模式下 查询key 在那个服务器
 clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, int argc, int *hashslot, int *error_code) {
     clusterNode *n = NULL;
     robj *firstkey = NULL;

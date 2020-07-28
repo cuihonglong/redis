@@ -259,7 +259,7 @@ int prepareClientToWrite(client *c)
 /* -----------------------------------------------------------------------------
  * Low level functions to add more data to output buffers.
  * -------------------------------------------------------------------------- */
-//添加回复到 client发送队列
+//添加到发送缓冲区
 int _addReplyToBuffer(client *c, const char *s, size_t len) {
     size_t available = sizeof(c->buf)-c->bufpos;
 
@@ -276,7 +276,7 @@ int _addReplyToBuffer(client *c, const char *s, size_t len) {
     c->bufpos+=len;
     return C_OK;
 }
-
+//添加到发送队列
 void _addReplyStringToList(client *c, const char *s, size_t len)
 {
     if (c->flags & CLIENT_CLOSE_AFTER_REPLY)
@@ -323,7 +323,7 @@ void _addReplyStringToList(client *c, const char *s, size_t len)
  * -------------------------------------------------------------------------- */
 
 /* Add the object 'obj' string representation to the client output buffer. */
-//添加回复数据
+//发送robj数据
 void addReply(client *c, robj *obj)
 {
     if (prepareClientToWrite(c) != C_OK)

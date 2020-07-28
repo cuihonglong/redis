@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "mutex": "c",
+        "thread": "c",
+        "xlocale": "c",
+        "xlocnum": "c",
+        "xiosbase": "c",
+        "exception": "c",
+        "functional": "c",
+        "istream": "c",
+        "ostream": "c",
+        "tuple": "c",
+        "type_traits": "c",
+        "xstring": "c",
+        "xutility": "c"
+    }
+}
