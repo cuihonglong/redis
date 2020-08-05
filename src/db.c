@@ -52,9 +52,12 @@ void updateLFU(robj *val) {
 /* Low level key lookup API, not actually called directly from commands
  * implementations that should instead rely on lookupKeyRead(),
  * lookupKeyWrite() and lookupKeyReadWithFlags(). */
-robj *lookupKey(redisDb *db, robj *key, int flags) {
-    dictEntry *de = dictFind(db->dict,key->ptr);
-    if (de) {
+//查找KEY 
+robj *lookupKey(redisDb *db, robj *key, int flags)
+{
+    dictEntry *de = dictFind(db->dict, key->ptr);
+    if (de)
+    {
         robj *val = dictGetVal(de);
 
         /* Update the access time for the ageing algorithm.
@@ -64,14 +67,19 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
             server.aof_child_pid == -1 &&
             !(flags & LOOKUP_NOTOUCH))
         {
-            if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
+            if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU)
+            {
                 updateLFU(val);
-            } else {
+            }
+            else
+            {
                 val->lru = LRU_CLOCK();
             }
         }
         return val;
-    } else {
+    }
+    else
+    {
         return NULL;
     }
 }
@@ -97,14 +105,19 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
  * for read operations. Even if the key expiry is master-driven, we can
  * correctly report a key is expired on slaves even if the master is lagging
  * expiring our key via DELs in the replication link. */
-robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
+//通过KEY查找内容
+robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags)
+{
     robj *val;
 
-    if (expireIfNeeded(db,key) == 1) {
+    //判断是否过期
+    if (expireIfNeeded(db, key) == 1)
+    {
         /* Key expired. If we are in the context of a master, expireIfNeeded()
          * returns 0 only when the key does not exist at all, so it's safe
          * to return NULL ASAP. */
-        if (server.masterhost == NULL) {
+        if (server.masterhost == NULL)
+        {
             server.stat_keyspace_misses++;
             return NULL;
         }
@@ -130,7 +143,9 @@ robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
             return NULL;
         }
     }
-    val = lookupKey(db,key,flags);
+
+    val = lookupKey(db, key, flags);
+
     if (val == NULL)
         server.stat_keyspace_misses++;
     else
@@ -140,8 +155,10 @@ robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) {
 
 /* Like lookupKeyReadWithFlags(), but does not use any flag, which is the
  * common case. */
-robj *lookupKeyRead(redisDb *db, robj *key) {
-    return lookupKeyReadWithFlags(db,key,LOOKUP_NONE);
+//通过KEY查找内容
+robj *lookupKeyRead(redisDb *db, robj *key)
+{
+    return lookupKeyReadWithFlags(db, key, LOOKUP_NONE);
 }
 
 /* Lookup a key for write operations, and as a side effect, if needed, expires
@@ -154,9 +171,12 @@ robj *lookupKeyWrite(redisDb *db, robj *key) {
     return lookupKey(db,key,LOOKUP_NONE);
 }
 
-robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply) {
+//通过KEY查找内容
+robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply)
+{
     robj *o = lookupKeyRead(c->db, key);
-    if (!o) addReply(c,reply);
+    if (!o)
+        addReply(c, reply);
     return o;
 }
 
@@ -213,15 +233,20 @@ void dbOverwrite(redisDb *db, robj *key, robj *val) {
  * 3) The expire time of the key is reset (the key is made persistent).
  *
  * All the new keys in the database should be created via this interface. */
-void setKey(redisDb *db, robj *key, robj *val) {
-    if (lookupKeyWrite(db,key) == NULL) {
-        dbAdd(db,key,val);
-    } else {
-        dbOverwrite(db,key,val);
+//set key val 命令
+void setKey(redisDb *db, robj *key, robj *val)
+{
+    if (lookupKeyWrite(db, key) == NULL)
+    {
+        dbAdd(db, key, val);
+    }
+    else
+    {
+        dbOverwrite(db, key, val);
     }
     incrRefCount(val);
-    removeExpire(db,key);
-    signalModifiedKey(db,key);
+    removeExpire(db, key);
+    signalModifiedKey(db, key);
 }
 
 int dbExists(redisDb *db, robj *key) {
@@ -1127,21 +1152,26 @@ void propagateExpire(redisDb *db, robj *key, int lazy) {
 }
 
 /* Check if the key is expired. */
-int keyIsExpired(redisDb *db, robj *key) {
-    mstime_t when = getExpire(db,key);
+//判断KEY是否过期
+int keyIsExpired(redisDb *db, robj *key)
+{
+    mstime_t when = getExpire(db, key);
     mstime_t now;
 
-    if (when < 0) return 0; /* No expire for this key */
+    if (when < 0)
+        return 0; /* No expire for this key */
 
     /* Don't expire anything while loading. It will be done later. */
-    if (server.loading) return 0;
+    if (server.loading)
+        return 0;
 
     /* If we are in the context of a Lua script, we pretend that time is
      * blocked to when the Lua script started. This way a key can expire
      * only the first time it is accessed and not in the middle of the
      * script execution, making propagation to slaves / AOF consistent.
      * See issue #1525 on Github for more information. */
-    if (server.lua_caller) {
+    if (server.lua_caller)
+    {
         now = server.lua_time_start;
     }
     /* If we are in the middle of a command execution, we still want to use
@@ -1151,11 +1181,13 @@ int keyIsExpired(redisDb *db, robj *key) {
      * may re-open the same key multiple times, can invalidate an already
      * open object in a next call, if the next call will see the key expired,
      * while the first did not. */
-    else if (server.fixed_time_expire > 0) {
+    else if (server.fixed_time_expire > 0)
+    {
         now = server.mstime;
     }
     /* For the other cases, we want to use the most fresh time we have. */
-    else {
+    else
+    {
         now = mstime();
     }
 
@@ -1183,8 +1215,11 @@ int keyIsExpired(redisDb *db, robj *key) {
  *
  * The return value of the function is 0 if the key is still valid,
  * otherwise the function returns 1 if the key is expired. */
-int expireIfNeeded(redisDb *db, robj *key) {
-    if (!keyIsExpired(db,key)) return 0;
+//判断KEY是否过期
+int expireIfNeeded(redisDb *db, robj *key)
+{
+    if (!keyIsExpired(db, key))
+        return 0;
 
     /* If we are running in the context of a slave, instead of
      * evicting the expired key from the database, we return ASAP:
@@ -1194,15 +1229,15 @@ int expireIfNeeded(redisDb *db, robj *key) {
      * Still we try to return the right information to the caller,
      * that is, 0 if we think the key should be still valid, 1 if
      * we think the key is expired at this time. */
-    if (server.masterhost != NULL) return 1;
+    if (server.masterhost != NULL)
+        return 1;
 
     /* Delete the key */
     server.stat_expiredkeys++;
-    propagateExpire(db,key,server.lazyfree_lazy_expire);
+    propagateExpire(db, key, server.lazyfree_lazy_expire);
     notifyKeyspaceEvent(NOTIFY_EXPIRED,
-        "expired",key,db->id);
-    return server.lazyfree_lazy_expire ? dbAsyncDelete(db,key) :
-                                         dbSyncDelete(db,key);
+                        "expired", key, db->id);
+    return server.lazyfree_lazy_expire ? dbAsyncDelete(db, key) : dbSyncDelete(db, key);
 }
 
 /* -----------------------------------------------------------------------------

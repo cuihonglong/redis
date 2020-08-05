@@ -571,36 +571,45 @@ void addReplyMultiBulkLen(client *c, long length) {
 }
 
 /* Create the length prefix of a bulk reply, example: $2234 */
-void addReplyBulkLen(client *c, robj *obj) {
+//增加$前缀
+void addReplyBulkLen(client *c, robj *obj)
+{
     size_t len;
 
-    if (sdsEncodedObject(obj)) {
+    if (sdsEncodedObject(obj))
+    {
         len = sdslen(obj->ptr);
-    } else {
+    }
+    else
+    {
         long n = (long)obj->ptr;
 
         /* Compute how many bytes will take this integer as a radix 10 string */
         len = 1;
-        if (n < 0) {
+        if (n < 0)
+        {
             len++;
             n = -n;
         }
-        while((n = n/10) != 0) {
+        while ((n = n / 10) != 0)
+        {
             len++;
         }
     }
 
     if (len < OBJ_SHARED_BULKHDR_LEN)
-        addReply(c,shared.bulkhdr[len]);
+        addReply(c, shared.bulkhdr[len]);
     else
-        addReplyLongLongWithPrefix(c,len,'$');
+        addReplyLongLongWithPrefix(c, len, '$');
 }
 
 /* Add a Redis Object as a bulk reply */
-void addReplyBulk(client *c, robj *obj) {
-    addReplyBulkLen(c,obj);
-    addReply(c,obj);
-    addReply(c,shared.crlf);
+//返回消息 $ + 内容 + 回车
+void addReplyBulk(client *c, robj *obj)
+{
+    addReplyBulkLen(c, obj);
+    addReply(c, obj);
+    addReply(c, shared.crlf);
 }
 
 /* Add a C buffer as bulk reply */
@@ -1202,7 +1211,8 @@ int handleClientsWithPendingWrites(void) {
 }
 
 /* resetClient prepare the client to process the next command */
-void resetClient(client *c) {
+void resetClient(client *c)
+{
     redisCommandProc *prevcmd = c->cmd ? c->cmd->proc : NULL;
 
     freeClientArgv(c);
@@ -1219,7 +1229,8 @@ void resetClient(client *c) {
      * to the next command will be sent, but set the flag if the command
      * we just processed was "CLIENT REPLY SKIP". */
     c->flags &= ~CLIENT_REPLY_SKIP;
-    if (c->flags & CLIENT_REPLY_SKIP_NEXT) {
+    if (c->flags & CLIENT_REPLY_SKIP_NEXT)
+    {
         c->flags |= CLIENT_REPLY_SKIP;
         c->flags &= ~CLIENT_REPLY_SKIP_NEXT;
     }
